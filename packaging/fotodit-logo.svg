@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Fotodit's logo: a photo whose corner peels off, as the hidden layer of details comes away.
+       The app icon (fotodit/resources/fotodit.ico) is drawn from this file by packaging/make_icon.py;
+       fotodit-logo-light.svg is the same logo for dark backgrounds. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A4A4F"/>
+      <stop offset="1" stop-color="#141416"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="0.3" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="flap" x1="198" y1="146" x2="152" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D8D8DD"/>
+      <stop offset="1" stop-color="#8E8E93"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#tile)"/>
+  <rect x="9.5" y="9.5" width="237" height="237" rx="54.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none" stroke="#000000" stroke-opacity="0.55"/>
+  <path d="M78 58 H178 Q198 58 198 78 V146 L150 194 H78 Q58 194 58 174 V78 Q58 58 78 58 Z" fill="#F5F5F7"/>
+  <circle cx="98" cy="100" r="15" fill="#1C1C1E"/>
+  <path d="M68 178 L102 136 Q106 131 110 136 L126 156 L136 144 Q140 139 144 144 L160 164 L160 178 Z" fill="#1C1C1E"/>
+  <path d="M198 146 C184 144 164 147 156 156 C148 165 148 181 150 194 Z" fill="url(#flap)"/>
+</svg>

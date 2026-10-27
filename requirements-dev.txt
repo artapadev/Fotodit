@@ -1,0 +1,6 @@
+-r requirements.txt
+pyinstaller==6.22.3
+pytest==9.1.1
+ruff==0.16.9
+# Used only in tests, as an independent verifier (not bundled with the app).
+pyexiv2==2.16.0
