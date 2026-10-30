@@ -285,8 +285,8 @@ sorting or grouping by date is selected, processing can start before the photo i
 
 ## Where is data kept?
 
-Settings and log: `%LOCALAPPDATA%\Fotodit\` (`ayarlar.ini`, `fotodit.log`; no file names or paths are written
-to the log). The `FOTODIT_DATA_DIR` environment variable selects another folder (e.g. for portable use from a
+Settings and log: `%LOCALAPPDATA%\Fotodit\` (`settings.ini`, which version 1.3.0 and earlier called `ayarlar.ini`
+and which is renamed at the first start; `fotodit.log`, into which no file names or paths are written). The `FOTODIT_DATA_DIR` environment variable selects another folder (e.g. for portable use from a
 USB stick). The app does not connect to the internet.
 
 ## For developers

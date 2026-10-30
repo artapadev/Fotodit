@@ -23,6 +23,20 @@ def data_dir() -> str:
     return path
 
 
+def settings_path() -> str:
+    """The settings file in the data folder. Version 1.3.0 and earlier called it ayarlar.ini: such a file is
+    renamed the first time, so no setting is lost."""
+    folder = data_dir()
+    path = os.path.join(folder, "settings.ini")
+    old = os.path.join(folder, "ayarlar.ini")
+    if not os.path.exists(path) and os.path.exists(old):
+        try:
+            os.replace(old, path)
+        except OSError:
+            return old  # better the old name than empty settings
+    return path
+
+
 def resource(name: str) -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", name)
 
@@ -88,7 +102,7 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_NAME)
     app.setApplicationVersion(__version__)
-    settings = QSettings(os.path.join(data_dir(), "ayarlar.ini"), QSettings.Format.IniFormat)
+    settings = QSettings(settings_path(), QSettings.Format.IniFormat)
     # The language comes first: every window takes its texts from it as it is built.
     i18n.set_language(i18n.resolve(str(settings.value("appearance/language", i18n.SYSTEM) or i18n.SYSTEM)))
     log.info("Language: %s", i18n.language())

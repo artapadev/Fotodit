@@ -129,7 +129,7 @@ def main() -> int:
     i18n.set_language("en" if "--en" in sys.argv else "tr")
     app = QApplication(sys.argv)
     theme.apply(app, theme.DARK if "--dark" in sys.argv else theme.LIGHT)
-    settings = QSettings(os.path.join(work, "ayarlar.ini"), QSettings.Format.IniFormat)
+    settings = QSettings(os.path.join(work, "settings.ini"), QSettings.Format.IniFormat)
     settings.clear()  # a folder used before keeps the last run's options (it ends applying to the originals)
     settings.setValue("browse/folder", work)  # do not browse the user's Pictures folder
     win = MainWindow(settings)
