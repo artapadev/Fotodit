@@ -38,18 +38,18 @@ them), the release as a whole is distributed under the GPL, version 3.
   libffi, Zstandard and others), all in `licenses\Python.txt`
 - https://www.python.org
 
-### Qt 6.11.2, PySide6 6.11.2 and Shiboken6 6.11.2 (the user interface)
+### Qt 6.12.0, PySide6 6.12.0 and Shiboken6 6.12.0 (the user interface)
 - License: LGPL-3.0-only: `licenses\LGPL-3.0.txt` (it builds on the GPL, version 3: `LICENSE`)
 - Qt contains third-party code of its own; Qt lists it at
-  https://doc.qt.io/qt-6.11/licenses-used-in-qt.html
-- Source: https://download.qt.io/official_releases/qt/6.11/6.11.2/ and
+  https://doc.qt.io/qt-6.12/licenses-used-in-qt.html
+- Source: https://download.qt.io/official_releases/qt/6.12/6.12.0/ and
   https://code.qt.io/cgit/pyside/pyside-setup.git/
 - The Qt libraries are separate DLLs (`_internal\PySide6\Qt6*.dll`) that can be replaced with
   compatible builds; the single-file version can be rebuilt from Fotodit's source with any compatible Qt.
 
-### FFmpeg 7.1 inside Qt Multimedia (video playback)
-- Files: `_internal\PySide6\avcodec-61.dll`, `avformat-61.dll`, `avutil-59.dll`, `swresample-5.dll`,
-  `swscale-8.dll`
+### FFmpeg 9.0.1 inside Qt Multimedia (video playback)
+- Files: `_internal\PySide6\avcodec-63.dll`, `avformat-63.dll`, `avutil-61.dll`, `swresample-7.dll`,
+  `swscale-10.dll`
 - License: LGPL-2.1-or-later: `licenses\LGPL-2.1.txt`
 - https://ffmpeg.org
 

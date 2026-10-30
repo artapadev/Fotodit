@@ -1,9 +1,9 @@
 Pillow==12.3.0
 pillow-heif==1.8.0
 # Qt 6.12 will be the last release that supports Windows 10; check this before moving to 6.13.
-PySide6-Essentials==6.11.2
+PySide6-Essentials==6.12.0
 # Video playback (QtMultimedia with the FFmpeg backend). Must be the same version as PySide6-Essentials.
-PySide6-Addons==6.11.2
+PySide6-Addons==6.12.0
 rawpy==0.27.1
 # Video reading, conversion, metadata stripping (FFmpeg 8.1; the Windows wheel bundles x264/x265 → GPL).
 av==18.1.0
