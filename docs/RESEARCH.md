@@ -1,6 +1,6 @@
 # Fotodit — Research and Design Report
 
-*Date: 28 September 2026, updated 25 October 2026 · Version 1.3.0*
+*Date: 28 September 2026, updated 31 October 2026 · Version 1.4.0*
 
 This report summarizes the research done for Fotodit's three main goals and the decisions that were made:
 
@@ -16,8 +16,8 @@ removing parts of a video (§6e, "Removing parts") and the open-source release (
 interface to Apple's Liquid Glass design as iOS 27 draws it, in black, white and grey with the Inter typeface,
 and added keeping the capture date, date-based names, a warning
 for file names that give something away, shrinking photos, finding duplicates, removing a video's sound, the
-horizontal flip and a before/after view (§6g). Since then the interface has taken the look of Artapa's website,
-dark only, with the Onest typeface (§6f).
+horizontal flip and a before/after view (§6g). Version 1.4 gave the interface the look of Artapa's website, dark
+only, with the Onest typeface (§6f), and moved to Qt 6.12, a long-term release.
 
 Most decisions are based not on assumptions but on **measurements**: the actual behavior of the libraries was
 verified from their source code and through experiments; the results are given in this document with their figures.
@@ -552,13 +552,15 @@ program.
 
 | Option | Assessment |
 |---|---|
-| **PyAV 18.1 (FFmpeg 8.1.2) + Qt Multimedia (PySide6-Addons 6.11.2)** ✅ | PyAV uses FFmpeg's libraries in-process: packet-by-packet reading/writing (which allows byte-level work such as SEI cleaning), frame decoding, filter graphs, encoding. The Windows wheel comes with x264, x265, dav1d, SVT-AV1, libvpx, Opus, LAME and AMR (27.6 MB). Qt Multimedia provides ready-made playback with audio and A/V sync (with its own FFmpeg 7.1.5, LGPL). |
+| **PyAV 18.1 (FFmpeg 8.1.2) + Qt Multimedia (PySide6-Addons 6.12.0)** ✅ | PyAV uses FFmpeg's libraries in-process: packet-by-packet reading/writing (which allows byte-level work such as SEI cleaning), frame decoding, filter graphs, encoding. The Windows wheel comes with x264, x265, dav1d, SVT-AV1, libvpx, Opus, LAME and AMR (27.6 MB). Qt Multimedia provides ready-made playback with audio and A/V sync (with its own FFmpeg 9.0.1, LGPL). |
 | The installed `ffmpeg.exe` (winget, 9.0.1 "full") | Solid for conversion but 222 MB; packet-level cleaning is not possible from the command line, and there is no player. |
 | Windows Media Foundation (ctypes) | Needs no download but is very fragile via COM; HEVC requires a paid extension (not present on this computer), and MKV/WebM/AVI support is lacking. |
 | Writing the player with PyAV (waveOut for audio) | Possible, but many things such as A/V sync, seeking and audio device changes would have to be rewritten. |
 
 The downloads were made with the user's approval: `av-18.1.0-cp311-abi3-win_amd64.whl` (27.6 MB) and
-`pyside6_addons-6.11.2-cp310-abi3-win_amd64.whl` (168.2 MB; only the playback part goes into the package).
+`pyside6_addons-6.11.2-cp310-abi3-win_amd64.whl` (168.2 MB; only the playback part goes into the package). Qt 6.12,
+a long-term release and the last one for Windows 10, later took its place (PySide6, PySide6-Addons and Shiboken6
+6.12.0).
 Because Python 3.13 was removed from the computer and 3.14.7 was installed during the work, the virtual environment
 was rebuilt with 3.14 (same package versions; only 5 packages built specifically for 3.14, ~29 MB, were downloaded
 again).
@@ -1035,7 +1037,7 @@ rotation, crop or exposure.
 
 | Option | Assessment |
 |---|---|
-| **Python 3.14 + Pillow 12.3 + pillow-heif 1.8 + rawpy 0.27 (LibRaw 0.22) + PyAV 18.1 (FFmpeg 8.1) + PySide6 (Qt 6.11, including Multimedia) + PyInstaller 6.22** ✅ | Pillow offers JPEG (libjpeg-turbo), PNG, WebP, **AVIF**, TIFF and **LittleCMS** color management in a single package. pillow-heif provides HEIC reading/writing, rawpy/LibRaw RAW decoding, PyAV video reading/writing. Qt provides a fast thumbnail grid, video playback and a native Windows look. (The project started on Python 3.13; it moved to 3.14 when 3.13 was removed from the computer.) |
+| **Python 3.14 + Pillow 12.3 + pillow-heif 1.8 + rawpy 0.27 (LibRaw 0.22) + PyAV 18.1 (FFmpeg 8.1) + PySide6 (Qt 6.12, including Multimedia) + PyInstaller 6.22** ✅ | Pillow offers JPEG (libjpeg-turbo), PNG, WebP, **AVIF**, TIFF and **LittleCMS** color management in a single package. pillow-heif provides HEIC reading/writing, rawpy/LibRaw RAW decoding, PyAV video reading/writing. Qt provides a fast thumbnail grid, video playback and a native Windows look. (The project started on Python 3.13; it moved to 3.14 when 3.13 was removed from the computer.) |
 | C# / .NET + Magick.NET | Powerful, but the .NET SDK was not installed; ImageMagick's metadata behavior is harder to control. |
 | Tkinter | The package would be small, but a grid with thousands of thumbnails and a modern look are hard to achieve. |
 | Electron | 150 MB+ package, unnecessary bulk. |

@@ -138,7 +138,7 @@ Built from source (see [For developers](#for-developers)), the same programs are
      makes the frosted toolbars and dialogs solid. **Dil** (language): **Windows ayarına uy** (follow Windows;
      the default), **Türkçe** or **English**; the texts change when Fotodit starts again, which it offers to
      do at once (**Yeniden Başlat**, restart). The choices are remembered.
-   * **Fotodit 1.3.0**, next to it (or **F1**), opens **Hakkında** (about): the version, the license, and the
+   * **Fotodit 1.4.0**, next to it (or **F1**), opens **Hakkında** (about): the version, the license, and the
      components Fotodit is built on with their license texts.
 3. **Turn on the operations (right panel).** An operation's settings appear while it is on; hovering over a
    setting or its explanation shows more detail.

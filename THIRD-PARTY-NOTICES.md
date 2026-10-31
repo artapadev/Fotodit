@@ -33,7 +33,7 @@ them), the release as a whole is distributed under the GPL, version 3.
 
 ## Components
 
-### Python 3.14.7
+### Python 3.14.10
 - License: PSF License Version 2, and the licenses of the parts Python's Windows build bundles (bzip2,
   libffi, Zstandard and others), all in `licenses\Python.txt`
 - https://www.python.org
