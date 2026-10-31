@@ -2,8 +2,8 @@
 
 Every folder in the tree has a check box next to it: checking it selects the folder
 together with its subfolders without opening it; clicking its name opens the folder.
-The box also shows the folder's selection state (all / some / none). The icons are the
-app's own drawn ones in the accent color, as in Apple's sidebars.
+The box also shows the folder's selection state (all / some / none). The rows look like the
+links of Artapa's admin sidebar: names in the secondary text color, the open folder lit.
 """
 
 from __future__ import annotations
@@ -38,8 +38,9 @@ from PySide6.QtWidgets import (
 
 from ..core.folderscan import folder_key
 from ..i18n import t
-from . import count_text, icons, theme
+from . import count_text, icons
 from .folders import FULL, NONE, PARTIAL, SCANNING, FolderSelection
+from .widgets import BAR_RIGHT, SidebarDelegate, paint_row_highlight
 
 PathRole = Qt.ItemDataRole.UserRole + 1
 
@@ -140,7 +141,7 @@ def _title(text: str) -> QLabel:
 
 class FolderTree(QTreeView):
     """The folder tree with a full-width rounded highlight on the open and the hovered folder,
-    as in Apple's sidebars (the style would only tint the name, leaving the indent bare).
+    as on Artapa's admin sidebar (the style would only tint the name, leaving the indent bare).
 
     Deep folders make the tree's steps smaller, down to MIN_STEP, so the deepest names on show keep
     about ten characters even in the narrowest sidebar. (Explorer scrolls its tree sideways instead,
@@ -258,14 +259,17 @@ class FolderTree(QTreeView):
         hovered = False
         if not selected and self.viewport().underMouse():
             hovered = self.indexAt(self.viewport().mapFromGlobal(QCursor.pos())) == index
-        if selected or hovered:
-            painter.save()
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(theme.color(theme.ACCENT_SOFT if selected else theme.HOVER))
-            painter.drawRoundedRect(QRectF(option.rect).adjusted(1, 1, -1, -1), 7, 7)
-            painter.restore()
+        rect = QRectF(option.rect).adjusted(1, 1, -1, -1)
+        paint_row_highlight(painter, rect, selected, hovered, bar=self._bar_fits(index, rect))
         super().drawRow(painter, option, index)
+
+    def _bar_fits(self, index: QModelIndex, rect: QRectF) -> bool:
+        """Whether the open folder's bar keeps clear of the row's arrow, which stands in the indent
+        step just left of the folder (about 4 px either side of its middle). A folder near the tree's
+        top, a drive, has its arrow where the bar would be: it goes without the bar."""
+        step = self.indentation()
+        arrow = self.visualRect(index).left() - step / 2 - 4.5  # the arrow's left edge
+        return arrow - rect.left() >= BAR_RIGHT + 5
 
 
 class NavPanel(QWidget):
@@ -280,12 +284,14 @@ class NavPanel(QWidget):
         self.quick.setObjectName("Sidebar")
         self.quick.setIconSize(QSize(18, 18))
         self.quick.setFrameShape(QListWidget.Shape.NoFrame)
+        self.quick.setItemDelegate(SidebarDelegate(self.quick, highlight=True))
+        self.quick.viewport().setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         for label, path, icon in known_folders():
-            item = QListWidgetItem(icons.icon(icon, "MUTED"), label)
+            item = QListWidgetItem(icons.icon(icon, "MUTED", active="TEXT"), label)
             item.setData(PathRole, path)
             item.setToolTip(path)
             self.quick.addItem(item)
-        pc = QListWidgetItem(icons.icon("computer", "MUTED"), t("places.this_pc"))
+        pc = QListWidgetItem(icons.icon("computer", "MUTED", active="TEXT"), t("places.this_pc"))
         pc.setData(PathRole, "")
         self.quick.addItem(pc)
         self.quick.setFixedHeight(self.quick.sizeHintForRow(0) * self.quick.count() + 6)
@@ -307,6 +313,7 @@ class NavPanel(QWidget):
         self.tree = FolderTree()
         self.tree.setObjectName("Sidebar")
         self.tree.setFrameShape(QTreeView.Shape.NoFrame)
+        self.tree.setItemDelegate(SidebarDelegate(self.tree))
         self.tree.setModel(self.fs)
         for column in (1, 2, 3):
             self.tree.hideColumn(column)

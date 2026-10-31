@@ -794,7 +794,10 @@ def test_about_window(app, window):
         about.close()
 
 
-def test_theme_switch(app, window):
+def test_artapas_look(app, window):
+    """Artapa's look, dark only: its colors on the palette and the style sheet, the Görünüm menu with
+    "Saydamlığı azalt" and the languages (no light theme, no glass looks), and solid surfaces
+    remembered for the next start."""
     from PySide6.QtGui import QGuiApplication, QPalette
     from PySide6.QtWidgets import QStyleFactory
 
@@ -802,39 +805,31 @@ def test_theme_switch(app, window):
 
     win = window
     original = app.style().name()
-    window_color = lambda: app.palette().color(QPalette.ColorRole.Window).name().upper()  # noqa: E731
     try:
-        win.set_theme(theme.DARK)
-        assert theme.is_dark() and theme.mode() == theme.DARK and window_color() == "#141414"
-        assert "#262626" in app.styleSheet()  # the dark panel color
-        assert win.settings.value("appearance/theme") == theme.DARK and win.theme_actions[theme.DARK].isChecked()
-        assert glass.material(glass.PANEL) == glass._DARK[glass.PANEL]  # the glass follows
-        assert win.selected.model._muted.name().upper() == theme.MUTED.upper()  # cached colors follow
-        win.set_theme(theme.LIGHT)
-        assert not theme.is_dark() and window_color() == "#F2F2F2"
-        assert win.settings.value("appearance/theme") == theme.LIGHT and not win.theme_actions[theme.DARK].isChecked()
-        # The glass's look (Görünüm menu): clearer or frostier than the default, and remembered.
-        win.set_glass_level(glass.CLEAR)
-        assert glass.level() == glass.CLEAR and win.settings.value("appearance/glass") == glass.CLEAR
-        assert win.glass_actions[glass.CLEAR].isChecked() and not win.glass_actions[glass.DEFAULT].isChecked()
-        assert glass.material(glass.BAR).tint[3] < glass._LIGHT[glass.BAR].tint[3]
-        win.set_glass_level(glass.TINTED)
-        assert glass.material(glass.BAR).tint[3] > glass._LIGHT[glass.BAR].tint[3]
-        win.set_glass_level("nonsense")
-        assert glass.level() == glass.DEFAULT and glass.material(glass.BAR) == glass._LIGHT[glass.BAR]
+        theme.apply(app)
+        assert app.palette().color(QPalette.ColorRole.Window).name().upper() == "#070707"  # the calm stage
+        assert "#0d0d0d" in app.styleSheet()  # Artapa's surface-1
+        assert win.selected.model._muted.name().upper() == theme.MUTED.upper()  # cached colors are the theme's
+        actions = [a.text() for a in win.theme_btn.menu().actions() if not a.isSeparator()]
+        assert actions[0] == t("main.reduce_transparency") and len(actions) == 1 + len(win.language_actions)
+        assert not win.settings.contains("appearance/theme") and not win.settings.contains("appearance/glass")
+        win.set_reduce_transparency(True)
+        assert glass.reduce_transparency() and win.solid_action.isChecked()
+        assert win.settings.value("appearance/solid") in (True, "true")
+        win.set_reduce_transparency(False)
+        assert not glass.reduce_transparency() and not win.solid_action.isChecked()
     finally:  # the other tests run without the app's theme
-        glass.set_level(glass.DEFAULT)
+        glass.set_reduce_transparency(False)
         app.setStyleSheet("")
         app.setStyle(QStyleFactory.create(original))
         app.setPalette(app.style().standardPalette())
         QGuiApplication.styleHints().unsetColorScheme()
-        theme._use(False)
         theme._style = None
 
 
 def test_digits_line_up_only_where_numbers_change(app):
-    """Counters, timers and the date column get equal-width digits; other text keeps Inter's own,
-    whose tabular forms would widen the hyphens of file names too ("C - - Users")."""
+    """Counters, timers and the date column get equal-width digits; other text keeps Onest's own
+    proportional ones, whose narrow 1 reads better in running text."""
     from PySide6.QtGui import QFont, QFontMetricsF
 
     from fotodit.ui import fonts, theme
@@ -848,4 +843,4 @@ def test_digits_line_up_only_where_numbers_change(app):
     assert digits.featureValue(tnum) == 1 and not plain.isFeatureSet(tnum)
     fp, fd = QFontMetricsF(plain), QFontMetricsF(digits)
     assert fd.horizontalAdvance("1111") == fd.horizontalAdvance("0000")
-    assert fp.horizontalAdvance("C--Users") < fd.horizontalAdvance("C--Users")
+    assert fp.horizontalAdvance("1111") < fp.horizontalAdvance("0000")

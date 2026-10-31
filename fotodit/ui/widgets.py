@@ -1,10 +1,19 @@
 """Small helper components: badges on thumbnails, an elided label, pop-up button, number box and table
-header, menus, the empty-page message."""
+header, menus, an icon on a tile, the empty-page message."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QPointF, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPalette
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPalette,
+)
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QComboBox,
@@ -13,6 +22,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QSpinBox,
     QStyle,
+    QStyledItemDelegate,
     QStyleOptionComboBox,
     QStyleOptionHeaderV2,
     QStyleOptionSpinBox,
@@ -23,14 +33,16 @@ from PySide6.QtWidgets import (
 )
 
 from ..i18n import t
-from . import icons, theme
+from . import glass, icons, theme
 
 
 def _badge(painter: QPainter, rect: QRectF, fill: QColor, icon: str, text: str, font: QFont,
-           ink: str = "#FFFFFF") -> None:
+           ink: str = "#FFFFFF", border: QBrush | QColor | None = None) -> None:
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(fill)
     painter.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+    if border is not None:
+        glass.paint_ring(painter, rect, None, border)
     h = rect.height()
     s = h * 0.62
     x = rect.x() + h * 0.32
@@ -61,12 +73,14 @@ def paint_video_badge(painter: QPainter, corner: QPointF, duration: float | None
     h = fm.height() + (3 if compact else 5)
     w = h * 0.32 + h * 0.62 + (h * 0.16 + fm.horizontalAdvance(text) + h * 0.38 if text else h * 0.32)
     rect = QRectF(corner.x() + 5, corner.y() - h - 5, w, h)
-    _badge(painter, rect, QColor(0, 0, 0, 150), "play.fill", text, font)
+    # Artapa's dark glass round button, made a pill: dark, with a faint ring.
+    _badge(painter, rect, QColor(12, 12, 12, 170), "play.fill", text, font, theme.TEXT, QColor(255, 255, 255, 0x2B))
     painter.restore()
 
 
 def paint_edit_badge(painter: QPainter, corner: QPointF, compact: bool = False) -> None:
-    """The badge in the bottom-right corner of an edited photo's or video's thumbnail."""
+    """The badge in the bottom-right corner of an edited photo's or video's thumbnail: Artapa's badge
+    ("Yeni", "Yakında"), surface-1 in a ring of the premium gradient."""
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     font = _badge_font(painter, compact)
@@ -75,16 +89,17 @@ def paint_edit_badge(painter: QPainter, corner: QPointF, compact: bool = False) 
     h = fm.height() + (3 if compact else 5)
     w = h * 0.32 + h * 0.62 + (h * 0.16 + fm.horizontalAdvance(text) + h * 0.38 if text else h * 0.32)
     rect = QRectF(corner.x() - w - 5, corner.y() - h - 5, w, h)
-    _badge(painter, rect, QColor(255, 255, 255, 235), "pencil", text, font, "#161616")  # light, apart from ▶
+    ring = QBrush(theme.premium_gradient(rect.topLeft(), rect.topRight()))
+    _badge(painter, rect, QColor(theme.PANEL), "pencil", text, font, theme.TEXT, ring)
     painter.restore()
 
 
 def paint_check_badge(painter: QPainter, rect: QRectF, state: str, hover: bool = False) -> None:
     """The selection circle on tiles: "none" (an empty ring), "full" (a check), "partial" (a dash),
-    "busy" (three dots, while a folder is scanned)."""
+    "busy" (three dots, while a folder is scanned). Chosen, it is Artapa's silver circle in a dark ring,
+    which stands out on light and dark photos alike."""
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    from . import theme
 
     if state == "none":
         painter.setPen(Qt.PenStyle.NoPen)
@@ -99,13 +114,13 @@ def paint_check_badge(painter: QPainter, rect: QRectF, state: str, hover: bool =
         painter.drawEllipse(rect.adjusted(0.8, 0.8, -0.8, -0.8))
         painter.restore()
         return
-    # The ink with a ring of the opposite tone: it stands out on light and dark photos alike.
-    ink, on_ink = QColor(theme.ACCENT), QColor(theme.ON_ACCENT)
+    on_ink = QColor(theme.ON_ACCENT)
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(on_ink)
+    painter.setBrush(QColor(0, 0, 0, 110))
     painter.drawEllipse(rect)
-    painter.setBrush(ink)
-    painter.drawEllipse(rect.adjusted(1.4, 1.4, -1.4, -1.4))
+    silver = rect.adjusted(1.4, 1.4, -1.4, -1.4)
+    painter.setBrush(theme.silver_gradient(silver.top(), silver.bottom()))
+    painter.drawEllipse(silver)
     inner = rect.adjusted(rect.width() * 0.2, rect.height() * 0.2, -rect.width() * 0.2, -rect.height() * 0.2)
     if state == "full":
         icons.paint(painter, inner, "checkmark", on_ink)
@@ -131,10 +146,69 @@ def rounded(rect: QRectF, radius: float) -> QPainterPath:
     return path
 
 
+BAR_RIGHT = 6.5  # the open row's bar ends this far from the row's left edge (it starts 4.5 in)
+
+
+def paint_row_highlight(painter: QPainter, rect: QRectF, selected: bool, hover: bool, bar: bool = True) -> None:
+    """A sidebar row, as the links of Artapa's admin sidebar: under the pointer white at 6 %; the open
+    one white at 5 % over the strong aurora, with a line of light inside its top and, at its left, a bar
+    2 px wide of the premium gradient (`bar` False: none, where a tree's arrow would meet it)."""
+    if not (selected or hover):
+        return
+    radius = float(theme.RADIUS_WELL)
+    path = glass.shape_path(rect, radius)
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    if selected:
+        painter.fillPath(path, QColor(255, 255, 255, 0x0D))
+        glass.paint_aurora(painter, rect, path, 1.55)
+        glass.paint_rim(painter, rect, radius, 0x0F)
+        if bar:
+            inset = min(8.0, rect.height() * 0.25)
+            line = QRectF(rect.left() + BAR_RIGHT - 2.0, rect.top() + inset, 2.0, rect.height() - 2 * inset)
+            gradient = QLinearGradient(QPointF(0, line.top()), QPointF(0, line.bottom()))
+            for at, token in ((0.0, theme.PREMIUM_START), (0.5, theme.AURORA_WARM), (1.0, theme.AURORA_COOL)):
+                gradient.setColorAt(at, QColor(token))
+            painter.setBrush(gradient)
+            painter.drawRoundedRect(line, 1.0, 1.0)
+    else:
+        painter.fillPath(path, QColor(theme.HOVER))
+    painter.restore()
+
+
+class SidebarDelegate(QStyledItemDelegate):
+    """The rows of a sidebar list: their names in the secondary text color, in the primary one when
+    open or under the pointer, as the links of Artapa's admin sidebar. `highlight`: the delegate draws
+    the row's highlight too (a tree draws its own across the indent)."""
+
+    def __init__(self, parent: QWidget | None = None, highlight: bool = False):
+        super().__init__(parent)
+        self.highlight = highlight
+
+    def initStyleOption(self, option, index) -> None:  # noqa: N802 - Qt override
+        super().initStyleOption(option, index)
+        on = bool(option.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver))
+        color = QColor(theme.TEXT if on else theme.MUTED)
+        for role in (QPalette.ColorRole.Text, QPalette.ColorRole.HighlightedText):
+            option.palette.setColor(role, color)
+
+    def paint(self, painter: QPainter, option, index) -> None:
+        if self.highlight:
+            selected = bool(option.state & QStyle.StateFlag.State_Selected)
+            hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
+            paint_row_highlight(painter, QRectF(option.rect).adjusted(1, 1, -1, -1), selected, hover)
+        super().paint(painter, option, index)
+
+
 def menu(parent: QWidget) -> QMenu:
-    """A context menu in the app's style (rounded, with the theme's colors)."""
+    """A context menu in Artapa's look: the panel of its dropdowns, rounded, in a faint ring. The
+    window is see-through outside the rounded panel, so Windows' square shadow is left off."""
     m = QMenu(parent)
     m.setObjectName("AppMenu")
+    m.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    m.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+    m.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
     return m
 
 
@@ -290,14 +364,47 @@ class ElidedHeader(QHeaderView):
         return super().viewportEvent(event)
 
 
+class IconTile(QWidget):
+    """An icon on Artapa's tile (the mark of its sign-in card): white from 9 % at the top to 2.4 % at
+    the foot over the strong aurora, a faint ring and a line of light."""
+
+    def __init__(self, icon: str, color: str = "TEXT", size: int = 44, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.name, self.color = icon, color
+        self.setFixedSize(QSize(size, size))
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def set_icon(self, name: str, color: str | None = None) -> None:
+        self.name = name
+        if color is not None:
+            self.color = color
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        if glass.capturing():
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.width() * 0.29
+        path = glass.shape_path(rect, radius)
+        fill = QLinearGradient(QPointF(0, rect.top()), QPointF(0, rect.bottom()))
+        fill.setColorAt(0.0, QColor(255, 255, 255, 0x17))
+        fill.setColorAt(1.0, QColor(255, 255, 255, 0x06))
+        p.fillPath(path, fill)
+        glass.paint_aurora(p, rect, path, 1.55)
+        glass.paint_ring(p, rect, radius, QColor(255, 255, 255, 0x0D))
+        glass.paint_rim(p, rect, radius, 0x0F)
+        s = rect.width() * 0.5
+        icons.paint(p, QRectF(rect.center().x() - s / 2, rect.center().y() - s / 2, s, s), self.name, self.color)
+
+
 class EmptyState(QWidget):
-    """What an empty page says: a large icon, a title and a short explanation, centered."""
+    """What an empty page says: an icon on a tile, a title and a short explanation, centered."""
 
     def __init__(self, icon: str = "photo", title: str = "", text: str = "", parent: QWidget | None = None):
         super().__init__(parent)
-        from .controls import IconView
-
-        self.icon = IconView(icon, "MUTED", 46)
+        self.icon = IconTile(icon, "MUTED", 72)
         self.title = QLabel(title)
         self.title.setObjectName("EmptyTitle")
         self.text = QLabel(text)

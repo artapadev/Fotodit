@@ -111,7 +111,7 @@ def main() -> int:
     from .ui import theme
     from .ui.main_window import MainWindow
 
-    theme.apply(app, str(settings.value("appearance/theme", theme.SYSTEM) or theme.SYSTEM))
+    theme.apply(app)
 
     if i18n.language() == "tr":  # Qt's own texts (the file dialogs' buttons …) are English otherwise
         translator = QTranslator(app)

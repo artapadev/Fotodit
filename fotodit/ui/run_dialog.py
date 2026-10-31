@@ -1,4 +1,4 @@
-"""Job sheet: progress, cancellation and the result report, on a glass card over the window."""
+"""Job sheet: progress, cancellation and the result report, on a card over the window."""
 
 from __future__ import annotations
 
@@ -89,7 +89,8 @@ class RunDialog(Sheet):
         self.close_btn = self.add_button(t("common.close"), "accept", prominent=True)
         self.close_btn.hide()
         self.details.setStyleSheet(
-            f"QTreeWidget#Results {{ background: {theme.PANEL}; border-radius: 10px; padding: 4px; }}"
+            f"QTreeWidget#Results {{ background: {theme._rgba(theme.WELL)}; border-radius: {theme.RADIUS_WELL}px;"
+            " padding: 4px; }"
             "QTreeWidget#Results QHeaderView::section { background: transparent; }")
 
         self._thread = QThread(self)

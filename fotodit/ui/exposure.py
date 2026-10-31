@@ -21,7 +21,7 @@ from ..core.edits import MAX_EXPOSURE, ev_text, exposure_curve
 from ..core.rawdev import LinearPreview, linear_preview
 from ..i18n import t
 from . import glass, theme
-from .controls import BarButton, GlassSlider, IconView
+from .controls import BarButton, IconView, Slider
 from .widgets import ElidedLabel
 
 RAW_NOTE = "exposure.raw_note"
@@ -75,8 +75,8 @@ def exposed_image(image: QImage, ev: float) -> QImage:
 
 
 class ExposureBar(glass.GlassSurface):
-    """Exposure slider (−3 … +3 EV in steps of 0.1) with its value and a reset button, on a glass
-    capsule over the photo (the large preview's media glass)."""
+    """Exposure slider (−3 … +3 EV in steps of 0.1) with its value and a reset button, on Artapa's
+    floating pill over the photo."""
 
     changed = Signal(float)  # while moving (live preview)
     committed = Signal(float)  # the value to store
@@ -84,7 +84,7 @@ class ExposureBar(glass.GlassSurface):
     def __init__(self, parent=None):
         super().__init__(parent, kind=glass.MEDIA, radius=None)
         self.setObjectName("Media")
-        self.slider = GlassSlider(centered=True, media=True)
+        self.slider = Slider(centered=True)
         steps = int(round(MAX_EXPOSURE * 10))
         self.slider.setRange(-steps, steps)
         self.slider.setPageStep(5)
@@ -95,7 +95,7 @@ class ExposureBar(glass.GlassSurface):
         self.value = QLabel(ev_text(0.0))
         self.value.setFont(theme.tabular(self.value.font()))
         self.value.setMinimumWidth(64)
-        self.reset_btn = BarButton(t("common.reset"), "undo", media=True)
+        self.reset_btn = BarButton(t("common.reset"), "undo")
         self.reset_btn.setToolTip(t("exposure.reset_tip"))
         self.reset_btn.clicked.connect(self.reset)
         self.reset_btn.setEnabled(False)  # at 0 EV there is nothing to reset
@@ -113,7 +113,7 @@ class ExposureBar(glass.GlassSurface):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(18, 4, 6, 4)
         layout.setSpacing(10)
-        layout.addWidget(IconView("sun", "#F2F2F2", 18))
+        layout.addWidget(IconView("sun", "TEXT", 18))
         layout.addWidget(self.slider, 2)
         layout.addWidget(self.value)
         layout.addWidget(self.reset_btn)

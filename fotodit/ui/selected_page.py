@@ -105,7 +105,7 @@ class PlanModel(QAbstractTableModel):
         self._cell_cache: dict[int, dict[tuple[int, int], object]] = {}
         self._muted = QColor(theme.MUTED)
         self._bold = QFont()
-        self._bold.setWeight(QFont.Weight.DemiBold)
+        self._bold.setWeight(QFont.Weight.Medium)
         self._digits = theme.tabular(QFont())  # positions and dates line up down the column
         loader.ready.connect(self._thumb_ready)
         theme.changes().changed.connect(self._theme_changed)
@@ -347,8 +347,9 @@ class PlanModel(QAbstractTableModel):
 
 
 class RowDelegate(QStyledItemDelegate):
-    """Rows with a rounded selection highlight across the whole row, thumbnails with rounded corners
-    and the info column's drawn icons."""
+    """Rows with a rounded highlight across the whole row, thumbnails with rounded corners and the info
+    column's drawn icons. A selected row is tinted, with a peach edge at its start, as the current row
+    of Artapa's admin tables."""
 
     def paint(self, painter: QPainter, option, index) -> None:
         opt = QStyleOptionViewItem(option)
@@ -365,10 +366,10 @@ class RowDelegate(QStyledItemDelegate):
                 r.adjust(6, 0, 0, 0)
             if col == last:
                 r.adjust(0, 0, -6, 0)
-            color = QColor(theme.ACCENT_SOFT) if selected else QColor(theme.ITEM_HOVER)
+            color = QColor(255, 255, 255, 0x12) if selected else QColor(theme.ITEM_HOVER)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color)
-            radius = 8.0
+            radius = float(theme.RADIUS_WELL)
             # Only the row's outer corners are rounded: the cells in between are plain rectangles.
             path_rect = QRectF(r)
             if col != 0:
@@ -377,6 +378,9 @@ class RowDelegate(QStyledItemDelegate):
                 path_rect.adjust(0, 0, radius, 0)
             painter.setClipRect(r)
             painter.drawRoundedRect(path_rect, radius, radius)
+            if selected and col == 0:
+                painter.setBrush(QColor(theme.PEACH))
+                painter.drawRoundedRect(QRectF(r.left() + 4.5, r.top() + 9, 2.0, r.height() - 18), 1.0, 1.0)
             painter.setClipping(False)
         opt.state &= ~QStyle.StateFlag.State_Selected
         opt.state &= ~QStyle.StateFlag.State_HasFocus
@@ -550,7 +554,9 @@ class SelectedPage(QWidget):
         header.setMinimumSectionSize(40)  # (the text columns keep TEXT_MIN: see _fit_columns)
         self.table.setColumnWidth(COL_THUMB, THUMB_W + 18)
         self.table.setColumnWidth(COL_POS, 52)
-        self.table.setColumnWidth(COL_DATE, 124)
+        # The dates in equal-width digits ("12.05.2024 14:30", "2024-05-12 14:30") and the cell's padding.
+        date_w = QFontMetricsF(theme.tabular(self.table.font())).horizontalAdvance("00.00.0000 00:00")
+        self.table.setColumnWidth(COL_DATE, max(124, int(date_w + 0.99) + 24))
         self.table.setDragDropOverwriteMode(False)
         self.table.selectionModel().currentRowChanged.connect(self._current_changed)
         self.table.selectionModel().selectionChanged.connect(lambda *_: self._update_buttons())

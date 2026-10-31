@@ -18,8 +18,8 @@ from fotodit.ui import icons  # noqa: E402
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "fotodit", "ui")
 # Where the code names an icon: the call and the position of the name among its arguments.
-ICON_ARGS = {"icon": 0, "IconView": 0, "EmptyState": 0, "set_icon_name": 0, "BarButton": 1, "GlassButton": 1,
-             "paint": 2, "_paint_button": 3}
+ICON_ARGS = {"icon": 0, "IconView": 0, "IconTile": 0, "EmptyState": 0, "set_icon_name": 0, "BarButton": 1,
+             "PillButton": 1, "paint": 2, "_paint_button": 3}
 TOKENS = {"MUTED", "WARN", "EDIT", "DANGER"}
 
 

@@ -54,13 +54,6 @@ def _wheel(widget: QWidget) -> QWheelEvent:
                        Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
 
 
-def _ink(widget: QWidget, left: int, right: int) -> int:
-    """Pixels darker than the light box between columns `left` and `right` (from the right edge)."""
-    img = widget.grab().toImage()
-    return sum(1 for x in range(img.width() - left, img.width() - right) for y in range(3, img.height() - 3)
-               if img.pixelColor(x, y).lightness() < 170)
-
-
 def _marks(widget: QWidget, left: int, right: int, backdrop: str) -> int:
     """Pixels between columns `left` and `right` (from the right edge) that stand out from the box's
     most common shade, with the box drawn on `backdrop` (a translucent box shows what is behind it)."""
@@ -125,15 +118,15 @@ def test_pop_up_buttons_and_number_boxes_show_their_arrows(app):
     for box in (plain, combo):
         box.addItems(["Very high (95%), recommended", "High (90%)"])
         box.resize(220, 30)
-    assert _ink(plain, 22, 2) == 0  # what the boxes looked like: no arrow
-    assert _ink(combo, 22, 2) > 6
+    assert _marks(plain, 22, 2, theme.PANEL) == 0  # what the boxes looked like: no arrow
+    assert _marks(combo, 22, 2, theme.PANEL) > 6  # (on the inspector's card)
     plain_number, number = QSpinBox(holder), NumberBox(holder)
     for box in (plain_number, number):
         box.setRange(0, 99)
         box.setValue(5)
         box.resize(84, 30)
-    assert _ink(plain_number, 16, 2) == 0
-    assert _ink(number, 16, 2) > 6
+    assert _marks(plain_number, 16, 2, theme.PANEL) == 0
+    assert _marks(number, 16, 2, theme.PANEL) > 6
 
 
 def test_the_crop_bars_pop_up_button_shows_its_arrow_on_the_dark_stage(app):

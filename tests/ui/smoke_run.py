@@ -1,6 +1,6 @@
 """UI smoke test: opens the window, browses, selects, edits, processes and takes screenshots.
 
-Usage: python tests/ui/smoke_run.py <work_folder> [--visible] [--dark] [--en]
+Usage: python tests/ui/smoke_run.py <work_folder> [--visible] [--en]
 Does not touch the user's settings (they are written to an INI file in the work folder). `--en`: the
 interface in English (Turkish otherwise).
 """
@@ -128,7 +128,7 @@ def main() -> int:
     a, c = make_samples()
     i18n.set_language("en" if "--en" in sys.argv else "tr")
     app = QApplication(sys.argv)
-    theme.apply(app, theme.DARK if "--dark" in sys.argv else theme.LIGHT)
+    theme.apply(app)
     settings = QSettings(os.path.join(work, "settings.ini"), QSettings.Format.IniFormat)
     settings.clear()  # a folder used before keeps the last run's options (it ends applying to the originals)
     settings.setValue("browse/folder", work)  # do not browse the user's Pictures folder
@@ -142,7 +142,7 @@ def main() -> int:
     win.browser.navigate(a)
     pump(app, 3.0)
     win.grab().save(os.path.join(shots, "1_browse.png"))
-    menu = win.theme_btn.menu()  # the theme menu (light / dark / as Windows is set)
+    menu = win.theme_btn.menu()  # the Görünüm menu (reduce transparency, the language)
     menu.popup(win.theme_btn.mapToGlobal(win.theme_btn.rect().topLeft()))
     pump(app, 0.5)
     menu.grab().save(os.path.join(shots, "1b_theme_menu.png"))

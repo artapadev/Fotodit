@@ -1,10 +1,11 @@
-"""Sheets: questions, confirmations and progress shown on a glass card over the dimmed window.
+"""Sheets: questions, confirmations and progress shown on a card over the dimmed window.
 
-A sheet is a frameless, translucent dialog covering its window: the window beneath is dimmed
-(Apple pairs a modal task with a dimming layer) and the card in the middle is glass, bending a
-picture of the window taken when the sheet opens. Buttons sit at the bottom right, the default
-action as the prominent (accent) button; Enter presses it and Esc cancels. A sheet is a QDialog,
-so `exec()`, `accept()` and `reject()` work as usual.
+A sheet is a frameless, translucent dialog covering its window: the window beneath is blurred and
+dimmed, as Artapa's dialogs dim their page (rgb(5 5 5 / .6) over a 14 px blur), and the card in the
+middle is Artapa's sign-in card, frosting a picture of the window taken when the sheet opens (see
+`glass`). The title stands beside its icon on a tile; the buttons sit at the bottom right, the default
+action as the silver button. Enter presses it and Esc cancels. A sheet is a QDialog, so `exec()`,
+`accept()` and `reject()` work as usual.
 """
 
 from __future__ import annotations
@@ -24,15 +25,17 @@ from PySide6.QtWidgets import (
 
 from ..i18n import t
 from . import glass, theme
-from .controls import BarButton, GlassButton
+from .controls import SECONDARY, SILVER, PillButton
+from .widgets import IconTile
 
 CARD_W = 560
-RADIUS = 22
+RADIUS = theme.RADIUS_STAGE
+DIM = QColor(5, 5, 5, 153)  # rgb(5 5 5 / .6)
 
 
 class Sheet(QDialog):
-    """A dialog drawn as a glass card over its dimmed parent window. Put the content into
-    `self.body` (a vertical layout) and add buttons with `add_button`."""
+    """A dialog drawn as a card over its dimmed parent window. Put the content into `self.body` (a
+    vertical layout) and add buttons with `add_button`."""
 
     def __init__(self, parent: QWidget | None, title: str = "", icon: str | None = None, width: int = CARD_W):
         super().__init__(parent)
@@ -48,20 +51,17 @@ class Sheet(QDialog):
         self.card = QWidget(self)
         self.card.setObjectName("SheetCard")
         outer = QVBoxLayout(self.card)
-        outer.setContentsMargins(26, 22, 22, 18)
-        outer.setSpacing(12)
+        outer.setContentsMargins(26, 24, 22, 20)
+        outer.setSpacing(14)
         head = QHBoxLayout()
-        head.setSpacing(12)
+        head.setSpacing(14)
         self.icon_name = icon
         if icon:
-            from .controls import IconView
-
-            head.addWidget(IconView(icon, "WARN" if icon == "warning" else "ACCENT_TEXT", 26), 0,
-                           Qt.AlignmentFlag.AlignTop)
+            head.addWidget(IconTile(icon, "WARN" if icon == "warning" else "TEXT"), 0, Qt.AlignmentFlag.AlignTop)
         self.title = QLabel(title)
         self.title.setObjectName("SheetTitle")
         self.title.setWordWrap(True)
-        head.addWidget(self.title, 1)
+        head.addWidget(self.title, 1, Qt.AlignmentFlag.AlignVCenter)
         outer.addLayout(head)
         self.body = QVBoxLayout()
         self.body.setSpacing(10)
@@ -77,10 +77,12 @@ class Sheet(QDialog):
 
     def _restyle(self) -> None:
         self.setStyleSheet(self._qss())
+        self._glass_image = None
+        self.update()
 
     @staticmethod
     def _qss() -> str:
-        return (f"QLabel#SheetTitle {{ font-size: 12pt; font-weight: 700; color: {theme.TEXT}; }}"
+        return (f"QLabel#SheetTitle {{ font-size: 12.5pt; font-weight: 600; color: {theme.TEXT}; }}"
                 f"QWidget#SheetCard QLabel {{ color: {theme.TEXT}; }}"
                 f"QWidget#SheetCard QLabel#Muted {{ color: {theme.MUTED}; }}"
                 f"QWidget#SheetCard QLabel#Warn {{ color: {theme.WARN}; }}")
@@ -89,12 +91,9 @@ class Sheet(QDialog):
 
     def add_button(self, text: str, role: str = "reject", prominent: bool = False) -> QPushButton:
         """`role`: "accept" (closes with Accepted), "reject" or "none" (the caller connects it)."""
+        button = PillButton(text, None, kind=SILVER if prominent else SECONDARY)
         if prominent:
-            button = GlassButton(text, None, kind=glass.PROMINENT)
-            button.setMinimumWidth(120)
-        else:
-            button = BarButton(text, None)
-            button.setMinimumHeight(36)
+            button.setMinimumWidth(126)
         button.setAutoDefault(False)
         if role == "accept":
             button.clicked.connect(lambda: self._finish(button, True))
@@ -132,9 +131,20 @@ class Sheet(QDialog):
         if host is not None:
             top_left = host.mapToGlobal(QPoint(0, 0))
             self.setGeometry(QRect(top_left, host.size()))
-            self._backdrop = host.grab().toImage() if not glass.reduce_transparency() else None
+            self._backdrop = None if glass.reduce_transparency() else self._dimmed(host.grab().toImage())
         self._place_card()
         super().showEvent(event)
+
+    @staticmethod
+    def _dimmed(window: QImage) -> QImage:
+        """The window as the sheet shows it behind the card: blurred 14 px and darkened."""
+        dpr = window.devicePixelRatio() or 1.0
+        image = glass.frost(window.convertToFormat(glass.FMT), 14 * dpr, 1.0)
+        image.setDevicePixelRatio(dpr)
+        p = QPainter(image)
+        p.fillRect(QRectF(0, 0, image.width() / dpr, image.height() / dpr), DIM)
+        p.end()
+        return image
 
     def hideEvent(self, event) -> None:
         # The picture of the window and the glass made from it are large: let them go with the sheet.
@@ -161,11 +171,11 @@ class Sheet(QDialog):
         self.update()
 
     def _card_glass(self, rect: QRectF, mat: glass.Material, dpr: float) -> tuple[QImage | None, float]:
-        """The card's glass from the picture of the window (made once per placement)."""
+        """The card's frost from the picture of the window (made once per placement)."""
         if self._backdrop is None:
             return None, 0.0
         if self._glass_image is None:
-            margin = int(mat.frost * 1.5 + 2)
+            margin = glass.margin_of(mat)
             area = rect.toAlignedRect().adjusted(-margin, -margin, margin, margin)
             src_dpr = self._backdrop.devicePixelRatio() or 1.0
             img = QImage(round(area.width() * dpr), round(area.height() * dpr), glass.FMT)
@@ -175,24 +185,25 @@ class Sheet(QDialog):
             backdrop = QImage(self._backdrop)
             backdrop.setDevicePixelRatio(src_dpr)
             p.drawImage(QPointF(-area.x(), -area.y()), backdrop)
-            p.fillRect(QRectF(0, 0, area.width(), area.height()), QColor(0, 0, 0, 70))  # the dimmed window
             p.end()
             w, h = round(rect.width() * dpr), round(rect.height() * dpr)
-            self._glass_image = glass.render_glass(img, round(margin * dpr), w, h, RADIUS * dpr, mat, dpr)
+            self._glass_image = glass.render_glass(img, round(margin * dpr), w, h, mat, dpr)
         return self._glass_image
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), QColor(0, 0, 0, 70 if not theme.is_dark() else 110))
+        if self._backdrop is not None:
+            p.drawImage(QPointF(0, 0), self._backdrop)
+        else:
+            p.fillRect(self.rect(), DIM)
         rect = QRectF(self.card.geometry())
         mat = glass.material(glass.SHEET)
         dpr = self.devicePixelRatioF() or 1.0
         image, luminance = self._card_glass(rect, mat, dpr)
-        # A soft shadow lifts the card off the dimmed window; the contour draws its edge.
+        # A large, soft shadow lifts the card off the dimmed window.
         shadow, margin = glass.shadow_image(rect.width(), rect.height(), RADIUS, mat, dpr)
         p.drawImage(QPointF(rect.x() - margin, rect.y() - margin), shadow)
-        glass.paint_contour(p, rect, RADIUS, mat, dpr)
         glass.paint_glass(p, rect, image, mat, RADIUS, dpr, luminance=luminance)
 
 
@@ -237,4 +248,3 @@ def inform(parent: QWidget | None, title: str, text: str) -> None:
     sheet.add_button(t("common.ok"), "accept", prominent=True)
     sheet.exec()
     sheet.deleteLater()
-

@@ -32,11 +32,11 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 from ..core.video.probe import duration_text
 from ..i18n import t
 from . import glass, theme
-from .controls import BarButton, GlassSlider
+from .controls import BarButton, Slider
 from .softplayer import SOFT_CODECS, SoftPlayer
 
-KEPT = "#F2F2F2"  # the parts of a trimmed video that are kept (the removed parts stay faint)
-MARKING = "#F87171"  # the part being marked for removal
+KEPT = theme.ACCENT  # the parts of a trimmed video that are kept (the removed parts stay faint)
+MARKING = theme.DANGER  # the part being marked for removal
 
 NO_FRAME_POSITION = 2000  # ms: still no frame once the video has advanced this far → its picture cannot be decoded
 NO_FRAME_TIMEOUT = 15.0  # s: if the video does not advance at all, the same verdict after this long at the latest
@@ -294,12 +294,12 @@ class VideoPlayer(QObject):
         self._use_backup(0 if ended else max(0, self.player.position() - 500), play=True)
 
 
-class TrimSlider(GlassSlider):
+class TrimSlider(Slider):
     """The seek slider; for a trimmed video the kept parts are drawn on its track, and while a part
     to remove is being marked, the part from its start to the current position."""
 
     def __init__(self, parent=None):
-        super().__init__(parent, media=True)
+        super().__init__(parent)
         self.setObjectName("PvSeek")
         self._kept: list[tuple[int, int | None]] | None = None  # ms; end None: to the end
         self._pending: int | None = None  # ms: where the part being marked starts
@@ -323,7 +323,7 @@ class TrimSlider(GlassSlider):
     def paint_track(self, p: QPainter, cy: float) -> None:
         left, span = self._span()
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(255, 255, 255, 60))
+        p.setBrush(QColor(theme.TRACK))
         p.drawRoundedRect(QRectF(left, cy - 2, span, 4), 2, 2)
         if self.maximum() <= self.minimum():
             return
@@ -336,7 +336,7 @@ class TrimSlider(GlassSlider):
                 for edge in (x0, x1):
                     p.drawRoundedRect(QRectF(edge - 1.5, cy - 9, 3, 18), 1.5, 1.5)
         else:
-            p.setBrush(QColor(255, 255, 255, 230))
+            p.setBrush(QColor(theme.ACCENT))
             p.drawRoundedRect(QRectF(left, cy - 2, max(0.0, x - left), 4), 2, 2)
         if self._pending is not None:
             mark = self._x_of(self._pending)
@@ -355,7 +355,7 @@ AUDIO_TIP = "player.audio_tip"
 
 class VideoBar(glass.GlassSurface):
     """Play/pause, time, seek slider and volume on the first row; trimming, removing parts and
-    removing the sound on the second. A capsule of media glass over the video."""
+    removing the sound on the second. Artapa's floating pill over the video."""
 
     WIDTH = 900  # the bar's usual width (wider when the names of its buttons need it, see `fit`)
 
@@ -369,7 +369,7 @@ class VideoBar(glass.GlassSurface):
         super().__init__(parent, kind=glass.MEDIA, radius=22)
         self.setObjectName("Media")
         self.player = player
-        self.play_btn = BarButton("", "play.fill", media=True, tooltip=t("player.play_tip"),
+        self.play_btn = BarButton("", "play.fill", tooltip=t("player.play_tip"),
                                   accessible=t("menu.play"))
         self.play_btn.clicked.connect(player.toggle)
         self.time = QLabel("0:00 / 0:00")
@@ -384,29 +384,29 @@ class VideoBar(glass.GlassSurface):
         self._following = False
         self.slider.valueChanged.connect(self._seek)
         self.slider.sliderPressed.connect(lambda: player.seek(self.slider.value()))
-        self.mute_btn = BarButton("", "speaker", media=True, tooltip=t("player.mute_tip"), accessible=t("player.mute"))
+        self.mute_btn = BarButton("", "speaker", tooltip=t("player.mute_tip"), accessible=t("player.mute"))
         self.mute_btn.clicked.connect(self.toggle_mute)
-        self.volume = GlassSlider(media=True)
+        self.volume = Slider()
         self.volume.setRange(0, 100)
         self.volume.setValue(int(player.volume() * 100))
         self.volume.setFixedWidth(96)
         self.volume.setToolTip(t("player.volume_tip"))
         self.volume.setAccessibleName(t("player.volume"))
         self.volume.valueChanged.connect(lambda v: player.set_volume(v / 100))
-        self.start_btn = BarButton(t("player.start_here"), "trim.start", media=True)
+        self.start_btn = BarButton(t("player.start_here"), "trim.start")
         self.start_btn.setToolTip(t("player.start_tip") + "\n" + t(TRIM_NOTE, cut=t(CUT_LABEL)))
         self.start_btn.clicked.connect(self.trimStartRequested)
-        self.end_btn = BarButton(t("player.end_here"), "trim.end", media=True)
+        self.end_btn = BarButton(t("player.end_here"), "trim.end")
         self.end_btn.setToolTip(t("player.end_tip") + "\n" + t(TRIM_NOTE, cut=t(CUT_LABEL)))
         self.end_btn.clicked.connect(self.trimEndRequested)
-        self.cut_btn = BarButton(t(CUT_LABEL), "scissors", media=True)
+        self.cut_btn = BarButton(t(CUT_LABEL), "scissors")
         self.cut_btn.setToolTip(t(CUT_TIP))
         self.cut_btn.clicked.connect(self.cutRequested)
-        self.clear_btn = BarButton(t("player.clear_trim"), "undo", media=True)
+        self.clear_btn = BarButton(t("player.clear_trim"), "undo")
         self.clear_btn.setToolTip(t("player.clear_trim_tip"))
         self.clear_btn.clicked.connect(self.trimClearRequested)
         self.clear_btn.hide()
-        self.audio_btn = BarButton(t("player.remove_sound"), "speaker.slash", media=True)
+        self.audio_btn = BarButton(t("player.remove_sound"), "speaker.slash")
         self.audio_btn.setCheckable(True)
         self.audio_btn.setToolTip(t(AUDIO_TIP))
         self.audio_btn.toggled.connect(self.audioToggled)

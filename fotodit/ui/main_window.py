@@ -55,7 +55,7 @@ from ..core.video.probe import duration_text
 from ..core.video.process import VIDEO_COMPATIBLE, VIDEO_EDIT_NEEDS_MP4, VIDEO_KEEP
 from ..i18n import capitalize, decapitalize, percent, t
 from ..winutil import recycle_bin_capacity, volume_root
-from . import count_text, glass, number, size_text, theme
+from . import chrome, count_text, glass, number, size_text, theme
 from .browser import BrowserPage
 from .chrome import ContentArea
 from .controls import BarButton, IconView
@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         self.selected = SelectedPage(self.loader)
         self.options = OptionsPanel()
 
-        # The sidebar: glass from the window's left edge (as in macOS 27), the folders above the file info.
+        # The sidebar: a card on the stage (Artapa's admin panel), the folders above the file info.
         self.left = QSplitter(Qt.Orientation.Vertical)
         self.left.addWidget(self.nav)
         self.left.addWidget(self.info)
@@ -165,26 +165,7 @@ class MainWindow(QMainWindow):
         # A push button with a menu: it also opens with the keyboard (Space) and for screen readers.
         self.theme_btn = BarButton(t("main.appearance"), "theme", tooltip=t("main.appearance_tip"))
         menu = widget_menu(self.theme_btn)
-        group = QActionGroup(menu)
-        self.theme_actions = {}
-        for mode in theme.MODES:
-            action = menu.addAction(theme.mode_label(mode))
-            action.setCheckable(True)
-            action.setChecked(mode == theme.mode())
-            group.addAction(action)
-            action.triggered.connect(lambda _checked=False, m=mode: self.set_theme(m))
-            self.theme_actions[mode] = action
-        menu.addSeparator()
-        # Apple's three looks of the glass (iOS 27, macOS 27), and solid glass.
-        levels = QActionGroup(menu)
-        self.glass_actions = {}
-        for value in glass.LEVELS:
-            action = menu.addAction(t("main.glass", level=glass.level_label(value)))
-            action.setCheckable(True)
-            action.setChecked(value == glass.level())
-            levels.addAction(action)
-            action.triggered.connect(lambda _checked=False, v=value: self.set_glass_level(v))
-            self.glass_actions[value] = action
+        # Solid surfaces instead of frosted ones.
         self.solid_action = menu.addAction(t("main.reduce_transparency"))
         self.solid_action.setCheckable(True)
         self.solid_action.setToolTip(t("main.reduce_transparency_tip"))
@@ -214,10 +195,9 @@ class MainWindow(QMainWindow):
         foot_layout.addStretch(1)
         foot_layout.addWidget(self.about_btn)
 
-        self.sidebar = glass.GlassSurface(kind=glass.PANEL, radius=0, shadow=False, bleed=(40, 40, 0, 40))
-        self.sidebar.setObjectName("Glass")
+        self.sidebar = chrome.panel()
         side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(0, 0, 1, 0)
+        side.setContentsMargins(4, 6, 4, 4)
         side.setSpacing(0)
         side.addWidget(self.left, 1)
         side.addWidget(foot)
@@ -225,15 +205,14 @@ class MainWindow(QMainWindow):
         # buttons always show their whole words (English needs more room than Turkish).
         self.left.setMinimumWidth(230)
 
-        self.inspector = glass.GlassSurface(kind=glass.PANEL, radius=0, shadow=False, bleed=(0, 40, 40, 40))
-        self.inspector.setObjectName("Glass")
+        self.inspector = chrome.panel()
         ins = QVBoxLayout(self.inspector)
-        ins.setContentsMargins(1, 0, 0, 0)
+        ins.setContentsMargins(4, 6, 4, 4)
         ins.addWidget(self.options)
         self.inspector.setMinimumWidth(340)
         self.inspector.setMaximumWidth(460)
 
-        # The content: the pages with their toolbars floating above them as glass.
+        # The content: the pages with their toolbars floating above them as frosted pills.
         self.content = ContentArea()
         self.content.add_page(self.browser, t("main.browse"))
         self.content.add_page(self.selected, t("main.selected_tab", n=0))
@@ -253,16 +232,21 @@ class MainWindow(QMainWindow):
 
         self.content.setMinimumWidth(400)  # in a narrow window the side panels give way first
         self.split = QSplitter(Qt.Orientation.Horizontal)
-        self.split.addWidget(self.sidebar)
+        self.split.addWidget(chrome.PanelCell(self.sidebar, chrome.EDGE, 0))
         self.split.addWidget(self.content)
-        self.split.addWidget(self.inspector)
+        self.split.addWidget(chrome.PanelCell(self.inspector, 0, chrome.EDGE))
         self.split.setStretchFactor(0, 0)
         self.split.setStretchFactor(1, 1)
         self.split.setStretchFactor(2, 0)
-        self.split.setSizes([270, 790, 380])
+        self.split.setSizes([270, 770, 380])  # (four columns of tiles at 1440 px)
         self.split.setChildrenCollapsible(False)
-        self.split.setHandleWidth(1)
-        self.setCentralWidget(self.split)
+        self.split.setHandleWidth(chrome.GAP)  # the gap between a card and the content, where it is resized
+        # The window is Artapa's calm stage; the cards and the content lie on it.
+        stage = chrome.Stage()
+        holder = QVBoxLayout(stage)
+        holder.setContentsMargins(0, 0, 0, 0)
+        holder.addWidget(self.split)
+        self.setCentralWidget(stage)
 
         self._about = None
         self.selected.message.connect(lambda text: self.show_message(text, 9000))
@@ -323,9 +307,10 @@ class MainWindow(QMainWindow):
             state = s.value(key)
             if isinstance(state, QByteArray) and not state.isEmpty():
                 splitter.restoreState(state)
-        self.split.setHandleWidth(1)
+        self.split.setHandleWidth(chrome.GAP)
         self.left.setHandleWidth(9)
-        self.set_glass_level(str(s.value("appearance/glass", glass.DEFAULT) or glass.DEFAULT))
+        for gone in ("appearance/theme", "appearance/glass"):  # the light theme and the glass's looks are gone
+            s.remove(gone)
         self.solid_action.setChecked(s.value("appearance/solid", False) in (True, "true", "1", 1))
         s.beginGroup("options")
         self.options.load(s)
@@ -335,13 +320,6 @@ class MainWindow(QMainWindow):
             folder = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.PicturesLocation)
         self.browser.navigate(os.path.normpath(folder) if folder else "")
 
-    def set_theme(self, mode: str) -> None:
-        """Light, dark or as Windows is set (theme.SYSTEM); remembered for the next start."""
-        theme.apply(QApplication.instance(), mode)
-        self.settings.setValue("appearance/theme", theme.mode())
-        for name, action in self.theme_actions.items():
-            action.setChecked(name == theme.mode())
-
     def show_about(self) -> None:
         from .about import AboutDialog
 
@@ -350,7 +328,7 @@ class MainWindow(QMainWindow):
         self._about.open()  # (window-modal, without blocking)
 
     def set_reduce_transparency(self, solid: bool) -> None:
-        """Solid glass instead of see-through glass (remembered for the next start)."""
+        """Solid surfaces instead of frosted ones (remembered for the next start)."""
         glass.set_reduce_transparency(solid)
         self.settings.setValue("appearance/solid", bool(solid))
         if self.solid_action.isChecked() != bool(solid):
@@ -387,15 +365,8 @@ class MainWindow(QMainWindow):
         if not process.startDetached():
             log.error("Could not restart: %s", process.errorString())
 
-    def set_glass_level(self, value: str) -> None:
-        """Clearer, default or frostier glass (remembered for the next start)."""
-        glass.set_level(value)
-        self.settings.setValue("appearance/glass", glass.level())
-        for name, action in self.glass_actions.items():
-            action.setChecked(name == glass.level())
-
     def show_message(self, text: str, msec: int = 6000) -> None:
-        """A short message in a glass capsule at the bottom of the content."""
+        """A short message on a toast at the bottom of the content."""
         self.content.show_message(text, msec)
 
     def current_message(self) -> str:
@@ -851,7 +822,7 @@ class MainWindow(QMainWindow):
             where = (t("confirm.recycle") if o.recycle
                      else t("confirm.delete"))
             changed = t("confirm.in_place_spread", n=folders) if folders > 1 else t("confirm.in_place")
-            place = f"<p style='color:{theme.WARN}'><b>{changed}</b> {where}</p>"
+            place = f"<p style='color:{theme.WARN}'><span style='font-weight:600'>{changed}</span> {where}</p>"
         else:
             place = f"<p>{t('confirm.save_to', folder=esc(o.folder))}</p>"
         warnings = []

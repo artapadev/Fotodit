@@ -109,11 +109,12 @@ them), the release as a whole is distributed under the GPL, version 3.
   the GCC runtime they need: `licenses\python-packages\numpy\`
 - https://numpy.org
 
-### Inter 4.1 (the typeface)
-- The hinted static faces Regular, Medium, SemiBold and Bold (`_internal\fotodit\resources\fonts\`),
-  unmodified, as the Inter project publishes them.
-- License: SIL Open Font License 1.1: `licenses\Inter.txt`. The fonts stay under that license.
-- https://rsms.me/inter, source: https://github.com/rsms/inter/releases/tag/v4.1
+### Onest 2.001 (the typeface)
+- The hinted static faces Regular, Medium and SemiBold (`_internal\fotodit\resources\fonts\`),
+  unmodified, as the Onest project publishes them.
+- License: SIL Open Font License 1.1, Copyright 2021 The Onest Project Authors: `licenses\Onest.txt`.
+  The fonts stay under that license.
+- https://github.com/googlefonts/onest
 
 ### Hugeicons free icons 4.3.5 (the icons)
 - 48 icons of the free "stroke rounded" set, from the npm package `@hugeicons/core-free-icons` 4.3.5

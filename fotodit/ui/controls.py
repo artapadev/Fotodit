@@ -1,6 +1,5 @@
-"""Controls in the Liquid Glass style: buttons for glass bars, glass buttons, a segmented
-control with a sliding selection, a switch, a slider whose thumb turns into a lens while it is
-dragged, and a toast.
+"""Controls in Artapa's look: the quiet buttons of its header pill, its silver, secondary and red
+buttons, a row of tabs with a sliding selection, a switch, a slider with a silver thumb, and a toast.
 
 They keep Qt's own APIs (a switch is a QCheckBox, a button a QPushButton, a slider a QSlider),
 so keyboard use, screen readers, UI Automation and the code that drives them work as before;
@@ -10,16 +9,19 @@ of state moves with a spring (see `motion`), so it can be interrupted and revers
 
 from __future__ import annotations
 
+import math
+from collections import OrderedDict
+
+import numpy as np
 from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetricsF,
     QImage,
+    QLinearGradient,
     QPainter,
-    QPainterPath,
     QPen,
-    QRadialGradient,
 )
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -36,9 +38,7 @@ from ..i18n import t
 from . import glass, icons, theme
 from .motion import Spring
 
-# Colors of controls on the always-dark media bars (the large preview).
-MEDIA_TEXT = "#F2F2F2"
-MEDIA_DISABLED = "#636363"
+SILVER, SECONDARY, DANGER = "silver", "secondary", "danger"  # the kinds of PillButton
 
 
 def _qc(token: str) -> QColor:
@@ -55,6 +55,18 @@ def _blend(a: QColor, b: QColor, t: float) -> QColor:
     t = max(0.0, min(1.0, t))
     return QColor.fromRgbF(a.redF() + (b.redF() - a.redF()) * t, a.greenF() + (b.greenF() - a.greenF()) * t,
                            a.blueF() + (b.blueF() - a.blueF()) * t, a.alphaF() + (b.alphaF() - a.alphaF()) * t)
+
+
+def paint_focus(painter: QPainter, rect: QRectF, radius: float | None) -> None:
+    """Artapa's focus ring: 1 px of the accent at 62 %, 2 px outside the shape (:focus-visible)."""
+    outer = rect.adjusted(-2, -2, 2, 2)
+    r = min(outer.width(), outer.height()) / 2 if radius is None else radius + 2
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(_alpha(QColor(theme.ACCENT), 0.62), 1.0))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRoundedRect(outer.adjusted(0.5, 0.5, -0.5, -0.5), r - 0.5, r - 0.5)
+    painter.restore()
 
 
 class _FocusRing:
@@ -91,15 +103,14 @@ class _Feedback:
 
 
 class BarButton(_FocusRing, QPushButton):
-    """A button on a glass bar: an icon and/or a text, no background of its own until hovered
-    (a capsule highlight), pressed (darker) or checked (accent). `media`: light colors for the
-    always-dark bars of the large preview."""
+    """A button on a bar, as the links of Artapa's header pill: an icon and/or a text in the
+    secondary text color, with no background until the pointer comes (white at 6 % and the primary
+    color); pressed or checked, white at 10 %."""
 
     def __init__(self, text: str = "", icon_name: str | None = None, parent: QWidget | None = None,
-                 media: bool = False, tooltip: str = "", accessible: str | None = None):
+                 tooltip: str = "", accessible: str | None = None):
         super().__init__(text, parent)
         self._icon_name = icon_name
-        self.media = media
         self._compact = False  # only the icon is shown (narrow windows); the text stays the button's name
         self._fb = _Feedback(self)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -134,14 +145,6 @@ class BarButton(_FocusRing, QPushButton):
 
     def shown_text(self) -> str:
         return "" if self._compact else self.text()
-
-    def _colors(self) -> tuple[QColor, QColor, QColor, QColor]:
-        """(text, hover fill, press fill, checked fill)"""
-        if self.media:
-            text = QColor(MEDIA_TEXT if self.isEnabled() else MEDIA_DISABLED)
-            return text, QColor(255, 255, 255, 34), QColor(255, 255, 255, 58), QColor(255, 255, 255, 64)
-        text = _qc("TEXT" if self.isEnabled() else "DISABLED")
-        return text, _qc("HOVER"), _qc("PRESSED"), _qc("ACCENT_SOFT")
 
     def sizeHint(self) -> QSize:
         fm = QFontMetricsF(self.font())
@@ -183,38 +186,34 @@ class BarButton(_FocusRing, QPushButton):
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        text_color, hover, press, checked = self._colors()
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = r.height() / 2
-        if self.isChecked():
-            fill = checked if not self.media else checked
+        enabled = self.isEnabled()
+        h, d = (self._fb.hover.value, self._fb.press.value) if enabled else (0.0, 0.0)
+        lit = self.isChecked() and enabled
+        # White at 6 % under the pointer, 10 % pressed or checked (Artapa's nav-link and nav-link-active).
+        fill = max(0.10 if lit else 0.0, 0.06 * h, 0.10 * d)
+        if fill > 0.004:
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(fill)
+            p.setBrush(QColor(255, 255, 255, round(255 * fill)))
             p.drawRoundedRect(r, radius, radius)
-            if not self.media:
-                text_color = _qc("ACCENT_TEXT") if self.isEnabled() else text_color
-        if self.isEnabled():
-            h, d = self._fb.hover.value, self._fb.press.value
-            if h > 0.01 or d > 0.01:
-                fill = _blend(_alpha(hover, h), press, d)
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(fill)
-                p.drawRoundedRect(r, radius, radius)
+        if not enabled:
+            color = _qc("DISABLED")
+        else:
+            color = _blend(_qc("MUTED"), _qc("TEXT"), max(h, d, 1.0 if lit else 0.0))
         if self.focus_ring() and self.focusPolicy() != Qt.FocusPolicy.NoFocus:
-            p.setPen(QPen(_qc("ACCENT"), 2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(r.adjusted(1, 1, -1, -1), radius - 1, radius - 1)
+            paint_focus(p, r.adjusted(2, 2, -2, -2), None)
         text = self.shown_text()
         icon_size = 18.0
         x = r.center().x() - icon_size / 2 if not text else r.left() + 13
         if self._icon_name:
-            scale = 1.0 - 0.08 * self._fb.press.value
+            scale = 1.0 - 0.08 * d
             s = icon_size * scale
             icons.paint(p, QRectF(x + (icon_size - s) / 2, r.center().y() - s / 2, s, s), self._icon_name,
-                        text_color, motion=self._fb.hover.value if self.isEnabled() else 0.0)
+                        color, motion=h)
             x += icon_size + 6
         if text:
-            p.setPen(text_color)
+            p.setPen(color)
             p.setFont(self.font())
             if not self._icon_name:
                 p.drawText(r, Qt.AlignmentFlag.AlignCenter, text)
@@ -223,21 +222,112 @@ class BarButton(_FocusRing, QPushButton):
                            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
 
 
-class GlassButton(_FocusRing, QPushButton):
-    """A button that is a piece of glass itself: a round or capsule control floating over content,
-    or (`kind` PROMINENT) the primary action in the ink (black in light, white in dark). On press it
-    swells a little (about 3 %, macOS 27's calm response to a mouse) and lights up where it was
-    pressed."""
+# ------------------------------------------------------------------- pill buttons
+
+
+_GLOWS: OrderedDict[tuple, QImage] = OrderedDict()
+
+
+def _inset_glow(w: float, h: float, radius: float, dy: float, blur: float, spread: float, rgb: tuple[int, int, int],
+                alpha: float, dpr: float) -> QImage:
+    """CSS's `box-shadow: inset 0 dy blur spread color` of a w×h shape with corner radius `radius`:
+    the light that falls inside the shape past its edge moved by `dy` and grown by −`spread`. Kept for
+    reuse (the hover steps are rounded)."""
+    key = (round(w), round(h), round(radius, 1), round(dy, 1), round(blur, 1), spread, rgb, round(alpha, 3),
+           round(dpr, 3))
+    hit = _GLOWS.get(key)
+    if hit is not None:
+        _GLOWS.move_to_end(key)
+        return hit
+    pw, ph = max(1, round(w * dpr)), max(1, round(h * dpr))
+    sigma = max(1, round(blur / 2 * dpr))  # CSS: a Gaussian of half the blur radius (three box passes of it)
+    pad = 3 * sigma + 2  # the hole is drawn on a larger canvas, so its edges beyond the shape blur in too
+    hole = QImage(pw + 2 * pad, ph + 2 * pad, glass.FMT)
+    hole.fill(Qt.GlobalColor.transparent)
+    p = QPainter(hole)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.translate(pad, pad)
+    p.scale(dpr, dpr)
+    rect = QRectF(0, dy, w, h).adjusted(spread, spread, -spread, -spread)
+    p.fillPath(glass.shape_path(rect, max(0.0, radius - spread)), QColor(0, 0, 0, 255))
+    p.end()
+    a = glass.pixels(hole)[..., 3].astype(np.float32) / 255.0
+    a = glass.blur(a, sigma)[pad:pad + ph, pad:pad + pw]
+    light = np.clip(1.0 - a, 0.0, 1.0)
+    shape = QImage(pw, ph, glass.FMT)
+    shape.fill(Qt.GlobalColor.transparent)
+    p = QPainter(shape)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.scale(dpr, dpr)
+    p.fillPath(glass.shape_path(QRectF(0, 0, w, h), radius), QColor(0, 0, 0, 255))
+    p.end()
+    light *= glass.pixels(shape)[..., 3].astype(np.float32) / 255.0
+    out = np.zeros((ph, pw, 4), np.float32)
+    level = light * alpha * 255.0
+    out[..., 0] = level * rgb[2] / 255.0  # B, G, R, A in memory, premultiplied
+    out[..., 1] = level * rgb[1] / 255.0
+    out[..., 2] = level * rgb[0] / 255.0
+    out[..., 3] = level
+    image = glass._image(np.clip(out, 0, 255).astype(np.uint8))
+    image.setDevicePixelRatio(dpr)
+    _GLOWS[key] = image
+    while len(_GLOWS) > 80:
+        _GLOWS.popitem(last=False)
+    return image
+
+
+def _edge_gradient(rect: QRectF, alpha: float) -> QLinearGradient:
+    """The silver button's edge: linear-gradient(140deg, white .62, .06 at 38 %, 0 at 60 %, .34), at `alpha`."""
+    angle = math.radians(140)
+    dx, dy = math.sin(angle), -math.cos(angle)
+    length = abs(rect.width() * dx) + abs(rect.height() * dy)
+    c = rect.center()
+    gradient = QLinearGradient(QPointF(c.x() - dx * length / 2, c.y() - dy * length / 2),
+                               QPointF(c.x() + dx * length / 2, c.y() + dy * length / 2))
+    for at, level in ((0.0, 0.62), (0.38, 0.06), (0.60, 0.0), (1.0, 0.34)):
+        gradient.setColorAt(at, QColor(255, 255, 255, round(255 * level * alpha)))
+    return gradient
+
+
+def paint_silver_circle(painter: QPainter, c: QPointF, r: float, icon: str | None = None,
+                        icon_size: float = 0.0) -> None:
+    """Artapa's silver icon circle: #fff → #e6e7ee (55 %) → #c9ccd6, a light inner top edge, a dark
+    inner foot and a soft white glow under it, holding a dark icon."""
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    for i in range(4):  # the glow: 0 4px 14px -8px white at 34 %
+        k = (4 - i) / 4
+        painter.setBrush(QColor(255, 255, 255, round(255 * 0.34 * 0.18 * k)))
+        painter.drawEllipse(QPointF(c.x(), c.y() + 4), r - 6 + 4 * i, r - 6 + 4 * i)
+    rect = QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r)
+    painter.setBrush(theme.silver_gradient(rect.top(), rect.bottom()))
+    painter.drawEllipse(rect)
+    path = glass.shape_path(rect, None)
+    painter.fillPath(path.subtracted(path.translated(0, 1)), QColor(255, 255, 255, 242))
+    painter.fillPath(path.subtracted(path.translated(0, -1)), QColor(0, 0, 0, 20))
+    painter.restore()
+    if icon:
+        s = icon_size or r * 0.95
+        icons.paint(painter, QRectF(c.x() - s / 2, c.y() - s / 2, s, s), icon, QColor(theme.ON_ACCENT))
+
+
+class PillButton(_FocusRing, QPushButton):
+    """Artapa's buttons, as its `Button.astro` draws them. SILVER, the primary one: white at 5.5 % over
+    what is behind it, a line of light inside the top edge, a glow rising inside its foot and an edge a
+    pixel wide that is bright at the top left and again, fainter, at the bottom right; its icon sits in
+    the silver circle at its end. SECONDARY: a ring round a quiet wash, a cool glow inside its foot under
+    the pointer. DANGER: Artapa's red tint in a red ring, for what ends something. Under the pointer each
+    lifts (more light, a brighter edge); pressed, it shrinks to 97 %; disabled, it is at half strength."""
+
+    PAD = 3.0  # room for the focus ring
 
     def __init__(self, text: str = "", icon_name: str | None = None, parent: QWidget | None = None,
-                 kind: str = glass.CONTROL, tooltip: str = "", accessible: str | None = None,
-                 text_color: str | None = None):
+                 kind: str = SILVER, tooltip: str = "", accessible: str | None = None):
         super().__init__(text, parent)
         self._icon_name = icon_name
-        self._glass = glass.GlassRenderer(self, kind, None)
+        self._kind = kind
         self._fb = _Feedback(self)
-        self._press_at = QPointF()
-        self._text_color = text_color
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAutoDefault(False)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
@@ -245,27 +335,29 @@ class GlassButton(_FocusRing, QPushButton):
             self.setToolTip(tooltip)
         if accessible or (not text and tooltip):
             self.setAccessibleName(accessible or tooltip.split("(")[0].strip())
-        theme.changes().changed.connect(self._glass.invalidate)
-
-    PAD = 3.0  # room for the edge's contour and to swell into when pressed
-    SWELL = 1.0  # px per side when pressed
 
     def set_icon_name(self, name: str | None) -> None:
         self._icon_name = name
+        self.updateGeometry()
         self.update()
 
-    def set_kind(self, kind: str) -> None:
-        self._glass.kind = kind
-        self._glass.invalidate()
-        self.update()
+    def kind(self) -> str:
+        return self._kind
+
+    def _body_height(self) -> float:
+        return 40.0 if self._kind == SILVER else 34.0
 
     def sizeHint(self) -> QSize:
         fm = QFontMetricsF(self.font())
-        h = 40 if self._glass.kind == glass.PROMINENT else 38
+        h = self._body_height() + 2 * self.PAD
+        text = fm.horizontalAdvance(self.text()) if self.text() else 0.0
+        if self._kind == SILVER:
+            w = 24 + text + (12 + 30 + 5 if self._icon_name else 24)
+        else:
+            w = 16 + text + 16 + (16 + 7 if self._icon_name else 0)
         if not self.text():
-            return QSize(h, h)
-        w = fm.horizontalAdvance(self.text()) + 40 + (24 if self._icon_name else 0)
-        return QSize(int(w + 0.5), h)
+            w = h
+        return QSize(int(w + 2 * self.PAD + 0.5), int(h + 0.5))
 
     def minimumSizeHint(self) -> QSize:
         hint = self.sizeHint()
@@ -277,15 +369,10 @@ class GlassButton(_FocusRing, QPushButton):
             self._fb.hover.set_target(1.0)
         elif kind in (QEvent.Type.HoverLeave, QEvent.Type.Leave):
             self._fb.hover.set_target(0.0)
-        elif kind == QEvent.Type.HoverMove:
-            self._press_at = event.position()
-            if self._fb.hover.value > 0:
-                self.update()
         return super().event(event)
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self._press_at = event.position()
             self._fb.press.set_target(1.0)
         super().mousePressEvent(event)
 
@@ -293,65 +380,101 @@ class GlassButton(_FocusRing, QPushButton):
         self._fb.press.set_target(0.0)
         super().mouseReleaseEvent(event)
 
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.Type.EnabledChange and not self.isEnabled():
+            self._fb.hover.jump(0.0)
+            self._fb.press.jump(0.0)
+        super().changeEvent(event)
+
     def paintEvent(self, _event) -> None:
-        if glass.capturing():
-            return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        swell = self.SWELL * self._fb.press.value
-        base = QRectF(self.rect()).adjusted(self.PAD, self.PAD, -self.PAD, -self.PAD)
-        rect = base.adjusted(-swell, -swell, swell, swell)
-        prominent = self._glass.kind == glass.PROMINENT
-        extra = None
-        if not self.isEnabled():
-            extra = QColor(theme.PRIMARY_DISABLED) if prominent else QColor(128, 128, 128, 40)
-        glass.paint_contour(p, rect, None, self._glass.material(), self.devicePixelRatioF() or 1.0)
-        self._glass.paint(p, rect, extra_tint=extra)
-        radius = min(rect.width(), rect.height()) / 2
+        enabled = self.isEnabled()
+        h = self._fb.hover.value if enabled else 0.0
+        d = self._fb.press.value if enabled else 0.0
+        h = max(h, 1.0 if self.focus_ring() else 0.0)  # Artapa lifts a button that has the keyboard
+        full = QRectF(self.rect()).adjusted(self.PAD, self.PAD, -self.PAD, -self.PAD)
+        body_h = min(full.height(), self._body_height())
+        rect = QRectF(full.x(), full.center().y() - body_h / 2, full.width(), body_h)
+        if not enabled:
+            p.setOpacity(0.5)
+        scale = 1.0 - 0.03 * d
+        if scale != 1.0:
+            c = rect.center()
+            p.translate(c)
+            p.scale(scale, scale)
+            p.translate(-c)
+        radius = rect.height() / 2
         path = glass.shape_path(rect, None)
-        if self.isEnabled():
-            light = 0.10 * self._fb.hover.value + 0.16 * self._fb.press.value
-            if light > 0.005:
-                glow = QRadialGradient(self._press_at, max(rect.width(), rect.height()) * 0.75)
-                glow.setColorAt(0.0, QColor(255, 255, 255, int(255 * light)))
-                glow.setColorAt(1.0, QColor(255, 255, 255, 0))
-                p.fillPath(path, glow)
+        dpr = self.devicePixelRatioF() or 1.0
+        p.setPen(Qt.PenStyle.NoPen)
+        if self._kind == SILVER:
+            p.fillPath(path, QColor(255, 255, 255, round(255 * (0.055 + 0.07 * h))))
+            hq = round(h * 4) / 4  # the glow is drawn in a few steps of the hover (and kept)
+            glow = _inset_glow(rect.width(), rect.height(), radius, -(14 + 7 * hq), 24 + 22 * hq, -16,
+                               (255, 255, 255), 0.16, dpr)
+            p.drawImage(rect.topLeft(), glow)
+            glass.paint_rim(p, rect, None, 0x29)
+            glass.paint_ring(p, rect, None, _edge_gradient(rect, 0.58 + 0.42 * h))
+            text_color = QColor(theme.TEXT)
+        elif self._kind == DANGER:
+            tint = QColor(theme.STOP_TINT)
+            p.fillPath(path, _alpha(tint, 1.0 + h))
+            ring = QColor(theme.STOP_RING)
+            glass.paint_ring(p, rect, None, _alpha(ring, 1.0 + 0.6 * h))
+            text_color = QColor(theme.STOP)
+        else:
+            p.fillPath(path, QColor(255, 255, 255, round(255 * (0.05 + 0.04 * h))))
+            if h > 0.01:
+                hq = round(h * 4) / 4
+                glow = _inset_glow(rect.width(), rect.height(), radius, -12, 28, -16, (150, 170, 180), 0.42 * hq, dpr)
+                p.drawImage(rect.topLeft(), glow)
+            glass.paint_rim(p, rect, None, round(255 * (0.08 + 0.06 * h)))
+            glass.paint_ring(p, rect, None, _blend(_qc("BORDER"), _qc("BORDER_HOVER"), h))
+            text_color = QColor(theme.TEXT)
         if self.focus_ring():
-            p.setPen(QPen(QColor(theme.ACCENT if not prominent else theme.ON_ACCENT), 2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(rect.adjusted(1.5, 1.5, -1.5, -1.5), radius - 1.5, radius - 1.5)
-        if prominent:
-            color = QColor(theme.ON_ACCENT) if self.isEnabled() else QColor(theme.PRIMARY_DISABLED_TEXT)
-        elif self._text_color:
-            color = _qc(self._text_color)
-        else:
-            color = _qc("TEXT" if self.isEnabled() else "DISABLED")
+            paint_focus(p, rect, None)
         text = self.text()
-        icon_size = 20.0 if not text else 18.0
-        if text:
-            fm = QFontMetricsF(self.font())
-            total = fm.horizontalAdvance(text) + (icon_size + 7 if self._icon_name else 0)
-            x = rect.center().x() - total / 2
-        else:
-            x = rect.center().x() - icon_size / 2
+        fm = QFontMetricsF(self.font())
+        p.setFont(self.font())
+        if self._kind == SILVER:
+            if self._icon_name:
+                cr = 15.0
+                center = QPointF(rect.right() - 5 - cr, rect.center().y())
+                if text:
+                    room = QRectF(rect.left() + 24, rect.top(), center.x() - cr - 12 - rect.left() - 24, rect.height())
+                    shown = fm.elidedText(text, Qt.TextElideMode.ElideRight, room.width())
+                    p.setPen(text_color)
+                    p.drawText(room, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter, shown)
+                else:
+                    center = rect.center()
+                paint_silver_circle(p, center, cr, self._icon_name, 15.0)
+            elif text:
+                p.setPen(text_color)
+                p.drawText(rect, Qt.AlignmentFlag.AlignCenter,
+                           fm.elidedText(text, Qt.TextElideMode.ElideRight, rect.width() - 32))
+            return
+        icon_size = 16.0
+        total = (fm.horizontalAdvance(text) if text else 0.0) + (icon_size + (7 if text else 0) if self._icon_name else 0)
+        x = rect.center().x() - min(total, rect.width() - 24) / 2
         if self._icon_name:
             icons.paint(p, QRectF(x, rect.center().y() - icon_size / 2, icon_size, icon_size), self._icon_name,
-                        color, motion=self._fb.hover.value if self.isEnabled() else 0.0)
+                        text_color, motion=h)
             x += icon_size + 7
         if text:
-            p.setPen(color)
-            p.setFont(self.font())
-            p.drawText(QRectF(x, rect.top(), rect.right() - x, rect.height()),
-                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
+            p.setPen(text_color)
+            room = QRectF(x, rect.top(), rect.right() - 12 - x, rect.height())
+            p.drawText(room, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                       fm.elidedText(text, Qt.TextElideMode.ElideRight, room.width()))
 
 
 # ---------------------------------------------------------------- segmented control
 
 
 class Segmented(_FocusRing, glass.GlassSurface):
-    """A row of mutually exclusive segments on a glass capsule (the main tabs). The selection is a
-    lighter pill that slides to the chosen segment with a spring and stretches a little while it
-    moves, like a drop of liquid."""
+    """A row of mutually exclusive segments on a pill (the main tabs), as the links of Artapa's header
+    pill: the chosen one on white at 10 %, which slides to it with a spring and stretches a little
+    while it moves."""
 
     currentChanged = Signal(int)
 
@@ -404,9 +527,8 @@ class Segmented(_FocusRing, glass.GlassSurface):
         self.currentChanged.emit(index)
 
     def _label_font(self) -> QFont:
-        """A segment is a button: its label is bold (the selected one sits on the glass pill)."""
         font = self.font()
-        font.setWeight(QFont.Weight.Bold)
+        font.setWeight(QFont.Weight.Medium)
         return font
 
     def _segment_widths(self) -> list[float]:
@@ -480,33 +602,21 @@ class Segmented(_FocusRing, glass.GlassSurface):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rects = self._segment_rects()
-        media = self.kind() == glass.MEDIA
-        dark = media or theme.is_dark()
-        # The selection pill: lighter than the bar, with a soft shadow in light mode and no outline
-        # (iOS 27); stretched while it moves.
         if 0 <= self._current < len(rects):
             target = rects[self._current]
             stretch = min(10.0, abs(self._x.velocity) * 0.012)
             pill = QRectF(self._x.value - stretch / 2, target.y(), self._w.value + stretch, target.height())
             radius = pill.height() / 2
             p.setPen(Qt.PenStyle.NoPen)
-            if not dark:
-                p.setBrush(QColor(0, 0, 0, 22))
-                p.drawRoundedRect(pill.translated(0, 1.0), radius, radius)
-            p.setBrush(QColor(255, 255, 255, 240) if not dark else QColor(255, 255, 255, 40))
+            p.setBrush(QColor(theme.ACCENT_SOFT))
             p.drawRoundedRect(pill, radius, radius)
         for i, (r, text) in enumerate(zip(rects, self._labels, strict=True)):
             selected = i == self._current
             if i == self._hover and not selected:
                 p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QColor(255, 255, 255, 30) if dark else QColor(0, 0, 0, 14))
+                p.setBrush(QColor(theme.HOVER))
                 p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
-            if media:
-                color = QColor(MEDIA_TEXT)
-            else:
-                color = _qc("TEXT")
-                if not selected:
-                    color = _qc("MUTED") if i != self._hover else _qc("TEXT")
+            color = _qc("TEXT") if selected or i == self._hover else _qc("MUTED")
             font = self._label_font()
             p.setFont(font)
             fm = QFontMetricsF(font)
@@ -520,21 +630,19 @@ class Segmented(_FocusRing, glass.GlassSurface):
             p.drawText(QRectF(x, r.top(), r.right() - x, r.height()),
                        Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
         if self.focus_ring():
-            p.setPen(QPen(_qc("ACCENT"), 2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            rr = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-            p.drawRoundedRect(rr, rr.height() / 2, rr.height() / 2)
+            paint_focus(p, QRectF(self.rect()).adjusted(2, 2, -2, -2), None)
 
 
 # --------------------------------------------------------------------------- switch
 
 
 class Switch(_FocusRing, QCheckBox):
-    """An on/off switch with its label on the left (Apple's settings rows). It is a QCheckBox, so
-    `isChecked`, `setChecked` and `toggled` work as usual; the knob slides with a spring and
-    widens while pressed."""
+    """An on/off switch with its label on the left. It is a QCheckBox, so `isChecked`, `setChecked`
+    and `toggled` work as usual. Off, a well in a ring with a grey knob; on, Artapa's switch: the
+    premium gradient with a light inner top edge and a knob in the page's color. The knob slides with
+    a spring and widens while pressed."""
 
-    TRACK_W, TRACK_H = 38.0, 22.0
+    TRACK_W, TRACK_H = 40.0, 22.0
 
     def __init__(self, text: str = "", parent: QWidget | None = None, subtitle: str = ""):
         super().__init__(text, parent)
@@ -582,25 +690,31 @@ class Switch(_FocusRing, QCheckBox):
         r = QRectF(self.rect())
         track = QRectF(r.right() - self.TRACK_W - 1, r.center().y() - self.TRACK_H / 2, self.TRACK_W, self.TRACK_H)
         t = self._pos.value
-        off, on = _qc("SWITCH_OFF"), _qc("ACCENT")
+        radius = self.TRACK_H / 2
+        p.save()
         if not enabled:
-            on = _qc("CHECK_ON_OFF")
+            p.setOpacity(0.45)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(_blend(off, on, t))
-        p.drawRoundedRect(track, self.TRACK_H / 2, self.TRACK_H / 2)
-        knob_h = self.TRACK_H - 4
-        knob_w = knob_h + 6 * self._press.value
-        x = track.left() + 2 + (track.width() - 4 - knob_w) * t
-        knob = QRectF(x, track.top() + 2, knob_w, knob_h)
-        p.setBrush(QColor(0, 0, 0, 34))
-        p.drawRoundedRect(knob.adjusted(-0.6, -0.2, 0.6, 1.2), knob_h / 2 + 0.6, knob_h / 2 + 0.6)
-        # The knob stands out from the ink once on (white on black; in dark mode dark on white).
-        p.setBrush(_blend(QColor("#FFFFFF"), _qc("ON_ACCENT"), t) if enabled else QColor("#F2F2F2"))
+        p.setBrush(_qc("SWITCH_OFF"))
+        p.drawRoundedRect(track, radius, radius)
+        if t > 0.004:  # the premium gradient fades in as the knob slides over
+            p.setOpacity(p.opacity() * min(1.0, t))
+            p.setBrush(theme.premium_gradient(track.topLeft(), track.topRight()))
+            p.drawRoundedRect(track, radius, radius)
+            glass.paint_rim(p, track, None, 0x80)
+            p.setOpacity(1.0 if enabled else 0.45)
+        if t < 0.996:
+            glass.paint_ring(p, track, None, _alpha(_qc("BORDER"), 1.0 - t))
+        knob_h = self.TRACK_H - 6
+        knob_w = knob_h + 4 * self._press.value
+        x = track.left() + 3 + (track.width() - 6 - knob_w) * t
+        knob = QRectF(x, track.top() + 3, knob_w, knob_h)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(_blend(QColor("#B4B4B8"), _qc("PAGE"), t))
         p.drawRoundedRect(knob, knob_h / 2, knob_h / 2)
+        p.restore()
         if self.focus_ring():
-            p.setPen(QPen(_qc("ACCENT"), 2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(track.adjusted(-2.5, -2.5, 2.5, 2.5), self.TRACK_H / 2 + 2.5, self.TRACK_H / 2 + 2.5)
+            paint_focus(p, track, None)
         p.setPen(_qc("TEXT" if enabled else "DISABLED"))
         p.setFont(self.font())
         text_rect = QRectF(r.left(), r.top(), track.left() - 10 - r.left(), r.height())
@@ -611,30 +725,27 @@ class Switch(_FocusRing, QCheckBox):
 # --------------------------------------------------------------------------- slider
 
 
-class GlassSlider(_FocusRing, QSlider):
-    """A horizontal slider: a thin track, the filled part in the accent color (from the middle for
-    a centered range like exposure), and a round white thumb that turns into a magnifying lens of
-    glass while it is dragged. `marks`: parts of the track drawn in other colors (a trimmed video's
-    kept parts), as (start, end, color) in slider values. `media`: colors for dark bars."""
+class Slider(_FocusRing, QSlider):
+    """A horizontal slider: a thin track, the filled part in the accent (from the middle for a centered
+    range like exposure) and Artapa's silver circle for a thumb, which grows a little while it is
+    dragged. Subclasses draw marks of their own on the track (a trimmed video's kept parts)."""
 
-    THUMB = 20.0
-    LENS = 30.0
+    THUMB = 18.0
+    DRAGGED = 22.0
 
-    def __init__(self, parent: QWidget | None = None, centered: bool = False, media: bool = False):
+    def __init__(self, parent: QWidget | None = None, centered: bool = False):
         super().__init__(Qt.Orientation.Horizontal, parent)
         self.centered = centered
-        self.media = media
         self._drag = Spring(0.0, response=0.2, damping=0.9, parent=self)
         self._drag.changed.connect(lambda _v: self.update())
         self.sliderPressed.connect(lambda: self._drag.set_target(1.0))
         self.sliderReleased.connect(lambda: self._drag.set_target(0.0))
-        self.setMinimumHeight(int(self.LENS + 4))
+        self.setMinimumHeight(int(self.DRAGGED + 8))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
-        self._lens: glass.GlassRenderer | None = None
 
     def _span(self) -> tuple[float, float]:
-        pad = self.LENS / 2 + 1
+        pad = self.DRAGGED / 2 + 1
         return pad, max(1.0, self.width() - 2 * pad)
 
     def _x_of(self, value: float) -> float:
@@ -673,8 +784,6 @@ class GlassSlider(_FocusRing, QSlider):
         super().mouseReleaseEvent(event)
 
     def track_colors(self) -> tuple[QColor, QColor]:
-        if self.media:
-            return QColor(255, 255, 255, 60), QColor("#FFFFFF") if self.isEnabled() else QColor(255, 255, 255, 90)
         return _qc("TRACK"), _qc("ACCENT") if self.isEnabled() else _qc("CHECK_ON_OFF")
 
     def paint_track(self, p: QPainter, cy: float) -> None:
@@ -700,74 +809,29 @@ class GlassSlider(_FocusRing, QSlider):
         cy = self.height() / 2
         self.paint_track(p, cy)
         x = self._x_of(self.value())
-        t = self._drag.value
-        size = self.THUMB + (self.LENS - self.THUMB) * t
-        thumb = QRectF(x - size / 2, cy - size / 2, size, size)
-        if t > 0.02 and not glass.reduce_transparency():
-            self._paint_lens(p, thumb, cy, t)
-        else:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(0, 0, 0, 46))
-            p.drawEllipse(thumb.translated(0, 1))
-            p.setBrush(QColor("#FFFFFF") if self.isEnabled() else QColor("#E6E6E6"))
-            p.drawEllipse(thumb)
-            p.setPen(QPen(QColor(0, 0, 0, 22), 0.8))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(thumb.adjusted(0.4, 0.4, -0.4, -0.4))
+        size = self.THUMB + (self.DRAGGED - self.THUMB) * self._drag.value
+        if not self.isEnabled():
+            p.setOpacity(0.5)
+        paint_silver_circle(p, QPointF(x, cy), size / 2)
+        p.setOpacity(1.0)
         if self.focus_ring():
-            p.setPen(QPen(_qc("ACCENT"), 2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(thumb.adjusted(-3, -3, 3, 3))
-
-    def _paint_lens(self, p: QPainter, thumb: QRectF, cy: float, t: float) -> None:
-        """The thumb as a lens: the track under it, magnified, inside a rim of glass."""
-        dpr = self.devicePixelRatioF() or 1.0
-        img = QImage(round(self.width() * dpr), round(self.height() * dpr), glass.FMT)
-        img.setDevicePixelRatio(dpr)
-        img.fill(Qt.GlobalColor.transparent)
-        tp = QPainter(img)
-        tp.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.paint_track(tp, cy)
-        tp.end()
-        path = QPainterPath()
-        path.addEllipse(thumb)
-        p.save()
-        p.setClipPath(path)
-        zoom = 1.0 + 0.6 * t
-        c = thumb.center()
-        p.translate(c)
-        p.scale(zoom, zoom)
-        p.translate(-c)
-        p.drawImage(QPointF(0, 0), img)
-        p.restore()
-        tint = QColor(255, 255, 255, int(70 * t)) if not self.media else QColor(255, 255, 255, int(40 * t))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(tint)
-        p.drawEllipse(thumb)
-        mat = glass.material(glass.CONTROL, dark=self.media or theme.is_dark())
-        glass.paint_contour(p, thumb, None, mat, dpr)
-        e = glass.edges(max(1, round(thumb.width() * dpr)), max(1, round(thumb.height() * dpr)),
-                        thumb.width() / 2, mat, dpr)
-        light = QImage(e.highlight)
-        light.setDevicePixelRatio(dpr)
-        p.save()
-        p.setOpacity(t)
-        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
-        p.drawImage(thumb.topLeft() - QPointF(e.pad / dpr, e.pad / dpr), light)
-        p.restore()
+            paint_focus(p, QRectF(x - size / 2, cy - size / 2, size, size), None)
 
 
 # ---------------------------------------------------------------------------- toast
 
 
 class Toast(glass.GlassSurface):
-    """A short message in a glass capsule that floats at the bottom of its parent and fades away."""
+    """A short message on Artapa's toast, a pill that floats at the bottom of its parent and fades away."""
 
     def __init__(self, parent: QWidget):
-        super().__init__(parent, kind=glass.BAR, radius=None)
+        super().__init__(parent, kind=glass.TOAST, radius=None)
         self.label = QLabel(self)
         self.label.setObjectName("ToastText")
         self.label.setTextFormat(Qt.TextFormat.PlainText)
+        font = self.label.font()
+        font.setWeight(QFont.Weight.Medium)
+        self.label.setFont(font)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(18, 8, 18, 8)
         lay.addWidget(self.label)
@@ -802,8 +866,7 @@ class Toast(glass.GlassSurface):
 
 
 class ToolGroup(glass.GlassSurface):
-    """Buttons sharing one glass capsule on a toolbar (Apple groups neighbouring buttons of the same
-    kind). In a narrow window the buttons show only their icons."""
+    """Buttons sharing one pill on a toolbar. In a narrow window the buttons show only their icons."""
 
     def __init__(self, *buttons: QWidget, parent: QWidget | None = None, kind: str = glass.BAR,
                  margins: tuple[int, int, int, int] = (4, 4, 4, 4)):
@@ -850,11 +913,10 @@ class IconView(QWidget):
         icons.paint(p, QRectF(self.rect()), self.name, self.color)
 
 
-def separator(media: bool = False) -> QWidget:
+def separator() -> QWidget:
     """A short vertical hairline between groups on a bar."""
     line = QWidget()
     line.setFixedSize(1, 18)
-    color = "rgba(255,255,255,0.18)" if media else theme._rgba(theme.SEPARATOR)
-    line.setStyleSheet(f"background:{color};")
+    line.setStyleSheet(f"background:{theme._rgba(theme.BORDER_HOVER)};")
     line.setObjectName("BarSeparator")
     return line

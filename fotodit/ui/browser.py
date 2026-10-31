@@ -6,7 +6,7 @@ folder (a single click only highlights it); clicking the circle at the tile's to
 Ctrl+click) selects the folder together with its subfolders without opening it. Shift+click
 selects a range, Ctrl+A selects everything.
 
-The page's toolbars float above the grid as glass (see `chrome`): the back/forward/up buttons
+The page's toolbars float above the grid as frosted pills (see `chrome`): the back/forward/up buttons
 and the path bar (clickable steps; Ctrl+L types a path) at the top, the folder's counts and the
 selection buttons at the bottom. The
 grid leaves room for them (insets) and its content passes beneath them when scrolled, softened
@@ -85,7 +85,7 @@ EntryRole = Qt.ItemDataRole.UserRole + 1
 StateRole = Qt.ItemDataRole.UserRole + 2
 EditRole = Qt.ItemDataRole.UserRole + 3
 
-THUMB_RADIUS = 9.0
+THUMB_RADIUS = float(theme.RADIUS_MEDIA)
 EDGE_FADE = 18  # px of the scroll edge effect beyond the bars
 
 
@@ -335,8 +335,7 @@ class TileDelegate(QStyledItemDelegate):
         hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
         focus = bool(option.state & QStyle.StateFlag.State_HasFocus)
         return (e.path, e.mtime, e.kind, e.name, int(index.data(StateRole) or NONE), hover, focus, look,
-                option.rect.width(), option.rect.height(), round(dpr, 3), theme.is_dark(),
-                painter.font().key(), option.font.key())
+                option.rect.width(), option.rect.height(), round(dpr, 3), painter.font().key(), option.font.key())
 
     def paint(self, painter: QPainter, option, index) -> None:
         """Copies the tile from the drawn ones, drawing it first if anything on it changed."""
@@ -406,7 +405,7 @@ class TileDelegate(QStyledItemDelegate):
             if pm is LOADING or pm is None:
                 empty = img.adjusted(8, 8, -8, -8)
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QColor(theme.TILE_EMPTY))
+                painter.setBrush(QColor(theme.SURFACE_2))
                 painter.drawRoundedRect(empty, THUMB_RADIUS, THUMB_RADIUS)
                 if pm is None:
                     icons.paint(painter, QRectF(empty.center().x() - 14, empty.center().y() - 22, 28, 28),
@@ -428,7 +427,7 @@ class TileDelegate(QStyledItemDelegate):
                 painter.setClipPath(clip)
                 painter.drawPixmap(target, pm, QRectF(pm.rect()))
                 painter.restore()
-                painter.setPen(QPen(QColor(0, 0, 0, 28 if not theme.is_dark() else 60), 1))
+                painter.setPen(QPen(QColor(theme.BORDER), 1))  # a faint edge keeps dark photos apart from the stage
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawRoundedRect(target.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
                 if e.video:
@@ -539,8 +538,8 @@ class PhotoGrid(QListView):
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
-        # Scroll edge effect: where the content passes beneath the bars it fades into the window's
-        # color, so the glass above it stays legible (Apple's soft scroll edge).
+        # Scroll edge effect: where the content passes beneath the bars it fades into the stage's
+        # color, as Artapa's pages fade into theirs, so the pills above it stay legible.
         bar = self.verticalScrollBar()
         p = QPainter(self.viewport())
         base = QColor(theme.WINDOW)
@@ -940,7 +939,7 @@ class BrowserPage(QWidget):
         self._pos = -1
         self._not_found = False  # a typed path that does not exist is on show
 
-        # The bars (glass, floating above the grid; see `chrome`).
+        # The bars (frosted pills floating above the grid; see `chrome`).
         self.back_btn = BarButton("", "chevron.left", tooltip=t("nav.back"))
         self.back_btn.clicked.connect(self.go_back)
         self.fwd_btn = BarButton("", "chevron.right", tooltip=t("nav.forward"))

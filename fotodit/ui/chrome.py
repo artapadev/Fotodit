@@ -1,32 +1,41 @@
-"""The main window's chrome in the Liquid Glass layout.
+"""The main window's chrome in Artapa's layout (its admin panel).
 
-The window itself is the content layer. Three things float above it: the sidebar (folders and
-file info) and the inspector (the operations and the start button) as large glass panels inset
-from the window's edges, and, over the content area, the toolbars as glass capsules: the
-"Gözat / Seçilenler" segmented control, the page's own controls next to it and a bar at the
-bottom. The content scrolls beneath the capsules (the Browse grid starts below them and passes
-under them when scrolled), which is where the glass visibly bends what lies beneath it.
+The window itself is the calm stage (`Stage`). On it lie the sidebar (folders and file info) and the
+inspector (the operations and the start button) as cards inset from the window's edges, and, over the
+content area, the toolbars as the site's header pills: the "Gözat / Seçilenler" tabs, the page's own
+controls next to them and a bar at the bottom. The content scrolls beneath the pills (the Browse grid
+starts below them and passes under them when scrolled), which is where they frost what lies beneath.
 
-A page shows its chrome by offering `header_widgets()` (capsules placed to the right of the
-tabs; one may carry the property "stretch" to take the remaining width), `footer_widget()`
-(a capsule centered at the bottom) and `set_insets(top, bottom)` (the room the capsules take,
-so the content can start below them).
+A page shows its chrome by offering `header_widgets()` (pills placed to the right of the tabs; one
+may carry the property "stretch" to take the remaining width), `footer_widget()` (a pill centered at
+the bottom) and `set_insets(top, bottom)` (the room the pills take, so the content can start below
+them).
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter
 from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 
 from . import glass, theme
 from .controls import Segmented, Toast
 from .motion import Spring
 
-EDGE = 10  # distance of the floating glass panels from the window's edges
-GAP = 10  # between capsules
+EDGE = 10  # distance of the cards from the window's edges
+GAP = 10  # between pills
 HEADER_Y = 12
 BAR = 40
+
+
+class Stage(QWidget):
+    """The window's background: Artapa's calm stage (see `glass.paint_stage`). Everything on it is
+    transparent, so the stage shows between the cards and behind the content."""
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setClipRegion(event.region())
+        glass.paint_stage(p, QRectF(self.rect()), self.devicePixelRatioF() or 1.0)
 
 
 class Tabs(QObject):
@@ -79,9 +88,10 @@ class Tabs(QObject):
 
 
 class ToolbarBacking(QWidget):
-    """iOS 27's uniform toolbar: once the content scrolls beneath the floating bars, a frosted strip
-    fades in behind them (white at 85 % in light, black at 55 % in dark, with a hairline below), so
-    text never runs under text. The bars above it see it as their backdrop."""
+    """Artapa's header bar while the page is scrolled: once the content runs beneath the floating
+    pills, a strip fades in behind them, the content blurred and darkened toward the page's color at
+    the top (#060606 at 34 %), both fading out toward its foot, so text never runs under text. The pills
+    above it see it as their backdrop."""
 
     def __init__(self, parent: QWidget):
         super().__init__(parent)
@@ -102,7 +112,7 @@ class ToolbarBacking(QWidget):
             return
         p = QPainter(self)
         p.setOpacity(t)
-        if glass.capturing():  # the bars above are taking their backdrop: the strip as last drawn
+        if glass.capturing():  # the pills above are taking their backdrop: the strip as last drawn
             if self._image is not None:
                 p.drawImage(QPointF(0, 0), self._image)
             return
@@ -111,26 +121,35 @@ class ToolbarBacking(QWidget):
         image.setDevicePixelRatio(dpr)
         image.fill(Qt.GlobalColor.transparent)
         ip = QPainter(image)
-        self._glass.paint(ip, QRectF(self.rect()))
-        ip.fillRect(QRectF(0, self.height() - 1, self.width(), 1),
-                    QColor(0, 0, 0, 26 if theme.is_dark() else 13))
+        rect = QRectF(self.rect())
+        self._glass.paint(ip, rect)
+        tint = QLinearGradient(QPointF(0, 0), QPointF(0, rect.height()))
+        for at, alpha in ((0.0, 0.34), (0.55, 0.16), (1.0, 0.0)):
+            tint.setColorAt(at, QColor(6, 6, 6, round(255 * alpha)))
+        ip.fillRect(rect, tint)
+        fade = QLinearGradient(QPointF(0, 0), QPointF(0, rect.height()))  # the blur gives way toward the foot
+        fade.setColorAt(0.0, QColor(0, 0, 0, 255))
+        fade.setColorAt(0.6, QColor(0, 0, 0, 200))
+        fade.setColorAt(1.0, QColor(0, 0, 0, 0))
+        ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        ip.fillRect(rect, fade)
         ip.end()
         self._image = image
         p.drawImage(QPointF(0, 0), image)
 
 
 class ContentArea(QWidget):
-    """The pages with their floating glass toolbars and a toast for short messages."""
+    """The pages with their floating toolbars and a toast for short messages."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.stack = QStackedWidget(self)
-        self._content = glass.SharedBackdrop(self.stack)  # the bars above take their backdrop from one rendering
+        self._content = glass.SharedBackdrop(self.stack)  # the pills above take their backdrop from one rendering
         self.backing = ToolbarBacking(self)
         self.segmented = Segmented(self)
         self.tabs = Tabs(self.segmented, self.stack)
         self.tabs.currentChanged.connect(self._page_changed)
-        self.activity: QWidget | None = None  # a capsule shown above the footer while something runs
+        self.activity: QWidget | None = None  # a pill shown above the footer while something runs
         self.toast = Toast(self)
         self._pages: list[QWidget] = []
 
@@ -181,7 +200,7 @@ class ContentArea(QWidget):
         page = self.stack.currentWidget()
         if page is None:
             return
-        self.backing.setGeometry(0, 0, w, HEADER_Y + BAR + GAP // 2 + 4)
+        self.backing.setGeometry(0, 0, w, HEADER_Y + BAR + GAP + 12)
         self.backing.raise_()
         x = EDGE + 4
         self.segmented.adjustSize()
@@ -262,13 +281,13 @@ class ContentArea(QWidget):
 
 
 class PanelCell(QWidget):
-    """A splitter cell holding a glass panel inset from the window's edges (room for its shadow)."""
+    """A splitter cell holding a card inset from the window's edges."""
 
-    def __init__(self, panel: glass.GlassSurface, left: int, right: int, parent: QWidget | None = None):
+    def __init__(self, panel: QWidget, left: int, right: int, parent: QWidget | None = None):
         super().__init__(parent)
         self.panel = panel
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(left, EDGE, right, EDGE + 2)
+        lay.setContentsMargins(left, EDGE, right, EDGE)
         lay.addWidget(panel)
 
     def minimumSizeHint(self) -> QSize:
@@ -277,11 +296,11 @@ class PanelCell(QWidget):
         return QSize(hint.width() + m.left() + m.right(), hint.height() + m.top() + m.bottom())
 
 
-def panel(kind: str = glass.PANEL) -> glass.GlassSurface:
-    """A large glass panel (sidebar, inspector)."""
-    surface = glass.GlassSurface(kind=kind, radius=theme.RADIUS_PANEL)
+def panel() -> glass.GlassSurface:
+    """A card on the stage (the sidebar, the inspector), as the sidebar of Artapa's admin panel."""
+    surface = glass.GlassSurface(kind=glass.PANEL, radius=theme.RADIUS_STAGE, shadow=False)
     surface.setObjectName("Glass")
     return surface
 
 
-__all__ = ["BAR", "EDGE", "GAP", "ContentArea", "PanelCell", "QRect", "Tabs", "panel"]
+__all__ = ["BAR", "EDGE", "GAP", "ContentArea", "PanelCell", "QRect", "Stage", "Tabs", "panel"]

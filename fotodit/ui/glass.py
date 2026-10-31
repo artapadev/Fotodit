@@ -1,42 +1,38 @@
-"""Liquid Glass as Apple draws it in iOS 27 and macOS 27: the material of the controls that float
-above the content.
+"""Artapa's materials (artapa.com), drawn the way the site's CSS draws them.
 
-Glass is a lens over the content, not a blurred panel. It belongs to the control layer (toolbars,
-sidebars, buttons, a slider's thumb while it is dragged), never to the content, and glass never
-sits on glass. Apple publishes no figures for it; the recipe below follows pixel measurements of
-iOS 27 on a device (over black, white and grey) and Apple's iOS 27 design kit:
+- Stage (`paint_stage`): the window itself, as Artapa's admin panel lies on its page: #070707 with a
+  faint light from the top left and a fainter one from the bottom right, and a grain too fine to see
+  that keeps the light from banding.
+- Card (PANEL): the sidebar and the inspector, as the admin panel's sidebar: surface-1 under the
+  aurora (a warm light from the top left and a cool one from the bottom right, about 4 %), a ring a
+  pixel wide and a line of light inside the top edge. Opaque: nothing behind it is read.
+- Pill (BAR): a toolbar floating over the content, as the site's header pill: what lies beneath it
+  blurred (CSS blur(18px)) and more saturated (1.4), under rgb(30 30 30 / .5), which darkens over bright
+  content (up to .9) so that its words stay legible (the secondary ones at 5.1:1 over white); a ring.
+- Floating pill (MEDIA): a bar over photos and videos, as the site's floating pill: blur(34px)
+  saturate(1.45) under #0A0A0A at 74 %, a ring, a line of light at the top and a soft shadow.
+- Sheet (SHEET): a dialog card, as the site's sign-in card: blur(26px) saturate(1.35) under #0C0C0C at
+  50 %, the sheen, the aurora, a ring, a line of light and a 1 px glint along the top; a large, soft
+  shadow.
+- Toast (TOAST): a short message, as the site's toast: the blur under rgb(30 30 30 / .86) and a ring.
+- Round (ROUND): the large preview's round buttons, as the site's round play button: blur(14px) under
+  rgb(12 12 12 / .42), a ring of white at 17 % and a line of light.
 
-1. Backdrop: what lies beneath the surface (plus a margin) is rendered into an image: the
-   parent's own background and the lower siblings the surface floats over (`QWidget.render`,
-   or a widget's own `glass_backdrop` image when it has one, like the large preview's photo).
-   Other glass is skipped, so glass never shows glass.
-2. Frost, two paths: a wide blur (sigma about a quarter of a bar's height) mixed with a faint,
-   nearly sharp copy of the backdrop (about 30 %): content behind reads as a soft cloud with a
-   trace of its detail, never as recognizable blobs.
-3. Lens: the outer half of the corner radius bends like the edge of a plano-convex lens with a
-   convex squircle profile (Snell's law, index 1.5). Content near the edge is pulled inward a
-   little; through the frost it reads as a soft bend.
-4. Veil: a near-white (light) or mid-grey (dark) layer of about half opacity; for glass over
-   photos it darkens over bright images so white symbols stay legible.
-5. Edge, with no line all around: a specular highlight lit from straight above, as bright on
-   the bottom edge as on the top, added (not blended) to whatever lies beneath and fading to
-   nothing at the sides; and a thin dark contour just outside the shape, strongest at the sides,
-   that darkens the content next to it. Controls cast almost no shadow (1–6 %).
-
-If the backdrop did not change since the last paint (a child button's hover, say), the last
-image is reused. "Görünüm" offers Apple's three looks (clear, default, tinted) and "Saydamlığı
-azalt" (reduce transparency): a solid surface with the same edge. The setting is the app's own
-rather than Windows' "Transparency effects", which many Windows 10 machines have turned off for
-the taskbar's sake.
+How a frosted surface is drawn: what lies beneath it (plus a margin) is rendered into an image (the
+parent's own background and the lower siblings the surface floats over, through `QWidget.render`, or
+a widget's own `glass_backdrop` image when it has one, like the large preview's stage), blurred on a
+reduced copy and drawn under the veil. Other frosted surfaces are skipped, so glass never shows
+glass. If the backdrop did not change since the last paint (a child button's hover, say), the last
+image is reused. "Saydamlığı azalt" (reduce transparency) draws an almost opaque fill instead of the
+blur, as the site does where a browser has no backdrop filter.
 """
 
 from __future__ import annotations
 
-import math
 import os
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import numpy as np
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt, QTimer
@@ -44,114 +40,65 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QImage,
+    QLinearGradient,
     QPainter,
     QPainterPath,
+    QPixmap,
+    QRadialGradient,
     QRegion,
     QTransform,
 )
 from PySide6.QtWidgets import QWidget
 
-from ..i18n import t
 from . import theme
 
 FMT = QImage.Format.Format_ARGB32_Premultiplied
 
-PANEL = "panel"  # sidebars and inspectors: large, quiet, edge to edge
-BAR = "bar"  # toolbars and floating bars over content
-CONTROL = "control"  # small floating controls (a round button, a capsule)
-PROMINENT = "prominent"  # the primary action: glass in the ink (black in light, white in dark)
-MEDIA = "media"  # bars over photos and videos (the large preview): always dark
+PANEL = "panel"  # the sidebar and the inspector: opaque cards on the stage
+BAR = "bar"  # toolbars floating over the content
+MEDIA = "media"  # bars over photos and videos (the large preview)
 SHEET = "sheet"  # a card over the dimmed window (confirmations, progress, About)
-TOOLBAR = "toolbar"  # the strip behind the toolbars while the content is scrolled (iOS 27)
-
-IOR = 1.5  # refractive index of the glass
-
-# Apple's three looks (iOS 27: Settings > Appearance > Liquid Glass; macOS 27: System Settings).
-CLEAR, DEFAULT, TINTED = "clear", "default", "tinted"
-LEVELS = (CLEAR, DEFAULT, TINTED)
-
-
-def level_label(value: str) -> str:
-    """A look's name in the Görünüm menu."""
-    return t(f"glass.level.{value}")
+TOAST = "toast"  # a short message
+TOOLBAR = "toolbar"  # the strip behind the toolbars while the content is scrolled
+ROUND = "round"  # a round button over the large preview's stage (the edge arrows, play)
 
 
 @dataclass(frozen=True)
 class Material:
-    tint: tuple[int, int, int, int]  # RGBA veil laid over the frosted backdrop
-    frost: float  # width of the wide blur (logical px; its sigma is about half of it)
-    sharp: float  # share of the unblurred backdrop mixed into the frost (0–1)
-    vivid: float  # saturation multiplier of the backdrop
-    bezel: float  # width of the refracting rim (logical px; 0: no refraction)
-    lens: float  # thickness of the glass as a fraction of the bezel (how strongly the rim bends)
-    highlight: float  # added white in the outermost pixel of the top and bottom edges (0–1)
-    contour: tuple[float, float]  # darkening just outside the edge: at the top and bottom, at the sides
-    shadow: float  # opacity of the drop shadow (0–1)
-    shadow_blur: float  # logical px
-    shadow_y: float  # logical px
-    solid: tuple[int, int, int] = (250, 250, 250)  # opaque color with "Saydamlığı azalt"
-    adaptive: bool = False  # the veil darkens over bright backdrops (glass over photos)
+    tint: tuple[int, int, int, int]  # the veil over the frosted backdrop (RGBA); opaque: a solid card
+    blur: float = 0.0  # CSS blur radius (logical px): the standard deviation of the backdrop's blur
+    saturate: float = 1.0  # CSS saturate()
+    ring: int = 0  # alpha of the white ring a pixel wide inside the edge
+    rim: int = 0  # alpha of the white line of light inside the top edge
+    sheen: int = 0  # alpha of the white sheen from the top, gone by 45 % of the height
+    aurora: float = 0.0  # Artapa's aurora: 1 its usual strength, about 1.55 its strong one
+    glint: bool = False  # the line of warm and cool light along the top edge (the sign-in card)
+    shadow: float = 0.0  # opacity of the drop shadow (black)
+    shadow_blur: float = 0.0  # CSS blur radius of the shadow (logical px)
+    shadow_y: float = 0.0
+    shadow_spread: float = 0.0  # CSS spread (negative: the shadow is smaller than the surface)
+    solid: tuple[int, int, int] = (13, 13, 13)  # the fill with "Saydamlığı azalt"
+    adaptive: int = 0  # > 0: over bright backdrops the veil's alpha grows to this (its words stay legible)
 
 
-_LIGHT = {
-    PANEL: Material((246, 246, 246, 200), 32, 0.15, 1.15, 0, 1.0, 0.0, (0.0, 0.0), 0.0, 24, 6, (246, 246, 246)),
-    BAR: Material((243, 243, 243, 140), 22, 0.30, 1.2, 10, 1.0, 0.25, (0.08, 0.31), 0.03, 15, 7),
-    CONTROL: Material((243, 243, 243, 140), 16, 0.30, 1.2, 8, 1.0, 0.25, (0.08, 0.31), 0.03, 15, 6),
-    PROMINENT: Material((22, 22, 22, 240), 10, 0.0, 1.0, 8, 1.0, 0.25, (0.08, 0.31), 0.05, 15, 6, (22, 22, 22)),
-    SHEET: Material((248, 248, 248, 236), 32, 0.10, 1.15, 0, 1.0, 0.25, (0.06, 0.24), 0.20, 44, 8, (248, 248, 248)),
-    TOOLBAR: Material((255, 255, 255, 217), 12, 0.0, 1.0, 0, 1.0, 0.0, (0.0, 0.0), 0.0, 0, 0, (250, 250, 250)),
+_MATERIALS = {
+    PANEL: Material((13, 13, 13, 255), ring=20, rim=15, aurora=1.0),
+    BAR: Material((30, 30, 30, 128), blur=18, saturate=1.4, ring=15, shadow=0.25, shadow_blur=24, shadow_y=8,
+                  shadow_spread=-18, solid=(24, 24, 24), adaptive=230),
+    MEDIA: Material((10, 10, 10, 189), blur=34, saturate=1.45, ring=19, rim=15, shadow=0.7, shadow_blur=40,
+                    shadow_y=16, shadow_spread=-18, solid=(16, 16, 16)),
+    SHEET: Material((12, 12, 12, 128), blur=26, saturate=1.35, ring=20, rim=15, sheen=9, aurora=1.0, glint=True,
+                    shadow=0.9, shadow_blur=70, shadow_y=30, shadow_spread=-40, solid=(13, 13, 13)),
+    TOAST: Material((30, 30, 30, 219), blur=18, saturate=1.4, ring=20, shadow=0.35, shadow_blur=24, shadow_y=8,
+                    shadow_spread=-12, solid=(30, 30, 30)),
+    TOOLBAR: Material((6, 6, 6, 0), blur=10, saturate=1.4, solid=(10, 10, 10)),
+    ROUND: Material((12, 12, 12, 107), blur=14, ring=0x2B, rim=15, solid=(24, 24, 24)),
 }
-_DARK = {
-    PANEL: Material((36, 36, 36, 200), 32, 0.15, 1.15, 0, 1.0, 0.0, (0.0, 0.0), 0.0, 24, 6, (36, 36, 36)),
-    BAR: Material((77, 77, 77, 107), 22, 0.30, 1.2, 10, 1.0, 0.25, (0.0, 0.61), 0.06, 15, 7, (44, 44, 44)),
-    CONTROL: Material((77, 77, 77, 107), 16, 0.30, 1.2, 8, 1.0, 0.25, (0.0, 0.61), 0.06, 15, 6, (44, 44, 44)),
-    PROMINENT: Material((242, 242, 242, 240), 10, 0.0, 1.0, 8, 1.0, 0.25, (0.0, 0.61), 0.06, 15, 6,
-                        (242, 242, 242)),
-    SHEET: Material((44, 44, 44, 232), 32, 0.10, 1.15, 0, 1.0, 0.25, (0.0, 0.45), 0.40, 44, 8, (44, 44, 44)),
-    TOOLBAR: Material((0, 0, 0, 140), 12, 0.0, 1.0, 0, 1.0, 0.0, (0.0, 0.0), 0.0, 0, 0, (28, 28, 28)),
-}
-# Glass over photos and videos: the dark recipe; over bright images the veil grows darker
-# (white symbols need a body of about 115 or darker to stay legible).
-_MEDIA = Material((60, 60, 60, 107), 18, 0.35, 1.2, 10, 1.0, 0.25, (0.0, 0.61), 0.06, 15, 7, (40, 40, 40),
-                  adaptive=True)
-
-_level = DEFAULT
 
 
-def level() -> str:
-    return _level
-
-
-def set_level(value: str) -> None:
-    """Apple's three looks: CLEAR (more of the content shows), DEFAULT, TINTED (nearly opaque frost)."""
-    global _level
-    value = value if value in LEVELS else DEFAULT
-    if value != _level:
-        _level = value
-        theme.changes().changed.emit()  # glass surfaces drop their images and repaint
-
-
-def _tuned(mat: Material, kind: str) -> Material:
-    if _level == DEFAULT or kind in (PROMINENT, SHEET, TOOLBAR):
-        return mat
-    r, g, b, a = mat.tint
-    if _level == CLEAR:  # iOS 27 measured: the veil about 0.78 as strong, twice the sharp detail
-        return replace(mat, tint=(r, g, b, round(a * 0.78)), sharp=min(0.8, mat.sharp * 2.0), frost=mat.frost * 0.7)
-    target = 0.74 if kind != PANEL else 0.9  # tinted: a near-opaque frost, no sharp detail
-    return replace(mat, tint=(r, g, b, max(a, round(255 * target))), sharp=0.0, frost=mat.frost * 1.4)
-
-
-def material(kind: str, dark: bool | None = None) -> Material:
-    """The material of a kind of surface in the current (or given) appearance and look."""
-    if kind == MEDIA:
-        return _tuned(_MEDIA, kind)
-    dark = theme.is_dark() if dark is None else dark
-    base = (_DARK if dark else _LIGHT)[kind]
-    if kind == PROMINENT:  # the ink of the current theme
-        ink = QColor(theme.ACCENT)
-        base = replace(base, tint=(ink.red(), ink.green(), ink.blue(), base.tint[3]),
-                       solid=(ink.red(), ink.green(), ink.blue()))
-    return _tuned(base, kind)
+def material(kind: str) -> Material:
+    """The material of a kind of surface."""
+    return _MATERIALS[kind]
 
 
 # ------------------------------------------------------------ reduce transparency
@@ -161,16 +108,16 @@ _reduced = False
 
 
 def reduce_transparency() -> bool:
-    """Solid glass ("Saydamlığı azalt"); FOTODIT_SOLID_GLASS=1 forces it."""
+    """Solid surfaces ("Saydamlığı azalt"); FOTODIT_SOLID_GLASS=1 forces it."""
     return _reduced or os.environ.get("FOTODIT_SOLID_GLASS") == "1"
 
 
 def set_reduce_transparency(value: bool) -> None:
-    """Turns solid glass on or off (the theme menu's "Saydamlığı azalt")."""
+    """Turns solid surfaces on or off (the Görünüm menu's "Saydamlığı azalt")."""
     global _reduced
     if bool(value) != _reduced:
         _reduced = bool(value)
-        theme.changes().changed.emit()  # glass surfaces drop their images and repaint
+        theme.changes().changed.emit()  # frosted surfaces drop their images and repaint
 
 
 # ------------------------------------------------------------------ image helpers
@@ -205,27 +152,28 @@ def _box(a: np.ndarray, r: int, axis: int) -> np.ndarray:
 
 
 def blur(a: np.ndarray, r: int, passes: int = 3) -> np.ndarray:
-    """Gaussian-like blur: a few box passes in both directions."""
+    """Gaussian-like blur: a few box passes in both directions (three of radius r: a sigma of about r)."""
     out = a.astype(np.float32, copy=False)
     for _ in range(passes):
         out = _box(_box(out, r, 1), r, 0)
     return out
 
 
-def frost(img: QImage, radius: float, vivid: float, part: QRect | None = None) -> QImage:
-    """Blurs a (premultiplied) image by about `radius` device pixels and boosts its saturation;
-    `part`: the only rectangle of the result that is wanted (a surface inside its backdrop's margin).
-    The work happens on a reduced copy; Qt averages while reducing and interpolates when enlarging."""
+def frost(img: QImage, sigma: float, saturate: float, part: QRect | None = None) -> QImage:
+    """Blurs a (premultiplied) image with a standard deviation of about `sigma` device pixels and sets
+    its saturation as CSS's saturate() does; `part`: the only rectangle of the result that is wanted (a
+    surface inside its backdrop's margin). The work happens on a reduced copy; Qt averages while
+    reducing and interpolates when enlarging."""
     w, h = img.width(), img.height()
     part = QRect(0, 0, w, h) if part is None else part
-    factor = max(1, int(radius / 2.2))
+    factor = max(1, int(sigma / 1.25))
     sw, sh = max(2, -(-w // factor)), max(2, -(-h // factor))
     small = img.scaled(sw, sh, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
     small = small.convertToFormat(FMT)
     a = blur(pixels(small), 1, passes=2)
-    if vivid != 1.0:
+    if saturate != 1.0:
         lum = a[..., :3] @ np.array([0.0722, 0.7152, 0.2126], np.float32)  # B, G, R
-        a[..., :3] = lum[..., None] + (a[..., :3] - lum[..., None]) * np.float32(vivid)
+        a[..., :3] = lum[..., None] + (a[..., :3] - lum[..., None]) * np.float32(saturate)
     a = np.clip(a, 0, 255)
     a[..., :3] = np.minimum(a[..., :3], a[..., 3:4])  # stays premultiplied
     blurred = _image(a.astype(np.uint8))
@@ -247,126 +195,6 @@ def frost(img: QImage, radius: float, vivid: float, part: QRect | None = None) -
     return out
 
 
-# ------------------------------------------------------------------- the shape's optics
-
-
-def _rim(inside: np.ndarray, bezel: float, thickness: float) -> np.ndarray:
-    """How far inward (px) the content seen at `inside` px from the edge comes from: the rim is a
-    convex squircle h(x) = T·(1 − (1 − x)⁴)^¼ (x = inside/bezel); a vertical view ray refracts into
-    the glass at the surface normal and travels down through the height h, ending up h·tan(θ) further in."""
-    x = np.clip(inside / bezel, 1e-3, 1.0)
-    base = 1.0 - (1.0 - x) ** 4
-    height = thickness * base ** 0.25
-    slope = (thickness / bezel) * (1.0 - x) ** 3 * np.maximum(base, 1e-9) ** -0.75
-    slope = np.where(inside >= bezel, 0.0, slope)
-    height = np.where(inside >= bezel, thickness, height)
-    nz = 1.0 / np.sqrt(1.0 + slope * slope)
-    nr = slope * nz  # the normal's tilt toward the outside
-    eta = 1.0 / IOR
-    k = np.maximum(1.0 - eta * eta * (1.0 - nz * nz), 0.0)
-    f = eta * nz - np.sqrt(k)
-    rr = f * nr  # (negative: the ray bends inward)
-    rz = -eta + f * nz
-    return (height * -rr / np.maximum(-rz, 1e-6)).astype(np.float32)
-
-
-def _field(w: int, h: int, radius: float, pad: int = 0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The signed distance to a rounded rectangle's edge (device px, negative inside) and the edge's
-    outward normal, on a grid `pad` px larger than the shape on every side."""
-    ys, xs = np.mgrid[-pad:h + pad, -pad:w + pad].astype(np.float32)
-    px, py = xs + 0.5 - w / 2, ys + 0.5 - h / 2
-    qx, qy = np.abs(px) - (w / 2 - radius), np.abs(py) - (h / 2 - radius)
-    d = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - radius
-    corner = (qx > 0) & (qy > 0)
-    norm = np.maximum(np.hypot(qx, qy), 1e-6)
-    nx = np.where(corner, np.sign(px) * qx / norm, np.where(qx >= qy, np.sign(px), 0.0)).astype(np.float32)
-    ny = np.where(corner, np.sign(py) * qy / norm, np.where(qx >= qy, 0.0, np.sign(py))).astype(np.float32)
-    return d.astype(np.float32), nx, ny
-
-
-class _Optics:
-    """Where each pixel of the refracting rim looks (device px): `yy, xx` the pixels of the band,
-    `sy, sx` the backdrop points they show."""
-
-    def __init__(self, w: int, h: int, radius: float, bezel: float, lens: float):
-        radius = max(0.0, min(radius, w / 2, h / 2))
-        d, nx, ny = _field(w, h, radius)
-        inside = np.maximum(-d, 0.0)
-        bezel = max(2.0, min(bezel, w / 2, h / 2))
-        move = _rim(inside, bezel, bezel * lens)
-        band = (d <= 0) & (inside < bezel)
-        self.yy, self.xx = np.nonzero(band)
-        m = move[self.yy, self.xx]
-        self.sy = self.yy - ny[self.yy, self.xx] * m
-        self.sx = self.xx - nx[self.yy, self.xx] * m
-        # The pixels they take (the content only moves inward, so they lie inside the shape).
-        self.syi = np.clip(np.rint(self.sy), 0, h - 1).astype(np.intp)
-        self.sxi = np.clip(np.rint(self.sx), 0, w - 1).astype(np.intp)
-
-
-_OPTICS: OrderedDict[tuple, _Optics] = OrderedDict()
-
-
-def optics(w: int, h: int, radius: float, mat: Material, dpr: float) -> _Optics:
-    key = (w, h, round(radius, 2), mat.bezel, mat.lens, round(dpr, 3))
-    hit = _OPTICS.get(key)
-    if hit is None:
-        hit = _Optics(w, h, radius * dpr, mat.bezel * dpr, mat.lens)
-        _OPTICS[key] = hit
-        while len(_OPTICS) > 40:
-            _OPTICS.popitem(last=False)
-    else:
-        _OPTICS.move_to_end(key)
-    return hit
-
-
-class _Edges:
-    """The edge of a w×h glass shape (device px), on a grid `pad` px larger on every side:
-    `highlight`, white to be added (premultiplied), and `contour`, black to be laid over what is
-    next to the shape. Measured on iOS 27: the highlight peaks in the outermost pixel (half of it
-    0.8 pt in, a tenth 1.8 pt in), comes from straight above and is as bright at the bottom as at
-    the top, fading with (1 − θ/90°)^1.33 toward the sides; the contour is a 0.5 pt ring just outside
-    the edge whose strength grows from the top and bottom to the sides, (1 − |cos θ|)^0.75."""
-
-    def __init__(self, w: int, h: int, radius: float, highlight: float, contour: tuple[float, float],
-                 dpr: float):
-        self.pad = pad = max(2, math.ceil(1.6 * dpr))
-        radius = max(0.0, min(radius, w / 2, h / 2))
-        d, _nx, ny = _field(w, h, radius, pad)
-        up = np.abs(ny)  # |cos θ|: 1 at the top and bottom, 0 at the sides
-        theta = np.degrees(np.arccos(np.clip(up, 0.0, 1.0)))
-        angle = np.clip(1.0 - theta / 90.0, 0.0, 1.0) ** 1.33
-        inside_pt = np.maximum(-d, 0.0) / dpr
-        profile = 0.84 * np.exp(-(inside_pt / 0.85) ** 2.4) + 0.16 * np.exp(-inside_pt / 2.8)
-        cover = np.clip(0.5 - d, 0.0, 1.0)
-        light = np.clip(highlight * angle * profile * cover, 0.0, 1.0) * 255.0
-        self.highlight = _image(np.stack([light, light, light, light], axis=-1).astype(np.uint8))
-        floor, peak = contour
-        strength = floor + (peak - floor) * (1.0 - up) ** 0.75
-        outside_pt = d / dpr
-        ring = np.exp(-((outside_pt - 0.1) / 0.32) ** 2)
-        dark = np.clip(strength * ring, 0.0, 1.0) * 255.0
-        zero = np.zeros_like(dark)
-        self.contour = _image(np.stack([zero, zero, zero, dark], axis=-1).astype(np.uint8))
-
-
-_EDGES: OrderedDict[tuple, _Edges] = OrderedDict()
-
-
-def edges(w: int, h: int, radius: float, mat: Material, dpr: float) -> _Edges:
-    """The edge images of a w×h (device px) shape with corner radius `radius` (logical px)."""
-    key = (w, h, round(radius, 2), mat.highlight, mat.contour, round(dpr, 3))
-    hit = _EDGES.get(key)
-    if hit is None:
-        hit = _Edges(w, h, radius * dpr, mat.highlight, mat.contour, dpr)
-        _EDGES[key] = hit
-        while len(_EDGES) > 60:
-            _EDGES.popitem(last=False)
-    else:
-        _EDGES.move_to_end(key)
-    return hit
-
-
 def shape_path(rect: QRectF, radius: float | None) -> QPainterPath:
     """A rounded rectangle; `radius` None: a capsule (fully rounded ends)."""
     path = QPainterPath()
@@ -375,9 +203,147 @@ def shape_path(rect: QRectF, radius: float | None) -> QPainterPath:
     return path
 
 
+def _radius(rect: QRectF, radius: float | None) -> float:
+    return min(rect.width(), rect.height()) / 2 if radius is None else min(radius, rect.width() / 2,
+                                                                            rect.height() / 2)
+
+
+# ------------------------------------------------------------------- the stage
+
+
+_STAGES: OrderedDict[tuple, QPixmap] = OrderedDict()
+_GRAIN: QImage | None = None
+
+
+def _grain() -> QImage:
+    """A tile of grain a level of grey high on every other pixel, added to the stage so the edges
+    between the levels of its faint light do not show as bands (a browser dithers its gradients)."""
+    global _GRAIN
+    if _GRAIN is None:
+        on = np.random.default_rng(7).random((128, 128)) < 0.5
+        a = np.zeros((128, 128, 4), np.uint8)
+        a[on] = 1  # premultiplied white at 1/255: adds one level
+        _GRAIN = _image(a)
+    return _GRAIN
+
+
+def paint_stage(painter: QPainter, rect: QRectF, dpr: float, base: str | None = None) -> None:
+    """Artapa's calm stage over `rect`: radial-gradient(60% 55% at 0% 0%, #d8d8db1c, transparent 70%) and
+    radial-gradient(55% 55% at 100% 100%, #e2e0dd12, transparent 70%) on #070707 (or `base`)."""
+    w, h = max(1, round(rect.width())), max(1, round(rect.height()))
+    key = (w, h, round(dpr, 3), base)
+    pm = _STAGES.get(key)
+    if pm is None:
+        pm = QPixmap(max(1, round(w * dpr)), max(1, round(h * dpr)))
+        pm.setDevicePixelRatio(dpr)
+        pm.fill(QColor(base or theme.WINDOW))
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        area = QRectF(0, 0, w, h)
+        for corner, (rx, ry), color, alpha in ((QPointF(0, 0), (0.60, 0.55), "#D8D8DB", 0x1C),
+                                               (QPointF(w, h), (0.55, 0.55), "#E2E0DD", 0x12)):
+            gradient = QRadialGradient(QPointF(0, 0), 1.0)
+            c = QColor(color)
+            c.setAlpha(alpha)
+            gradient.setColorAt(0.0, c)
+            c.setAlpha(0)
+            gradient.setColorAt(0.7, c)
+            brush = QBrush(gradient)
+            brush.setTransform(QTransform.fromScale(rx * w, ry * h) * QTransform.fromTranslate(corner.x(), corner.y()))
+            p.fillRect(area, brush)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+        grain = QImage(_grain())
+        grain.setDevicePixelRatio(dpr)
+        p.fillRect(area, QBrush(grain))
+        p.end()
+        _STAGES[key] = pm
+        while len(_STAGES) > 6:
+            _STAGES.popitem(last=False)
+    else:
+        _STAGES.move_to_end(key)
+    painter.drawPixmap(rect.topLeft(), pm)
+
+
+# ------------------------------------------------------------------- Artapa's layers
+
+
+def paint_aurora(painter: QPainter, rect: QRectF, path: QPainterPath, strength: float = 1.0) -> None:
+    """Artapa's aurora on a shape: radial-gradient(120% 90% at 0% 0%, #feeae10b, transparent 55%) and
+    radial-gradient(120% 90% at 100% 100%, #c0cef20a, transparent 60%), `strength` times as strong."""
+    for corner, token, alpha, end in ((rect.topLeft(), theme.AURORA_WARM, 0x0B, 0.55),
+                                      (rect.bottomRight(), theme.AURORA_COOL, 0x0A, 0.60)):
+        gradient = QRadialGradient(QPointF(0, 0), 1.0)
+        c = QColor(token)
+        c.setAlpha(min(255, round(alpha * strength)))
+        gradient.setColorAt(0.0, c)
+        c.setAlpha(0)
+        gradient.setColorAt(end, c)
+        brush = QBrush(gradient)
+        brush.setTransform(QTransform.fromScale(1.2 * rect.width(), 0.9 * rect.height())
+                           * QTransform.fromTranslate(corner.x(), corner.y()))
+        painter.fillPath(path, brush)
+
+
+def paint_sheen(painter: QPainter, rect: QRectF, path: QPainterPath, alpha: int) -> None:
+    """linear-gradient(180deg, white at `alpha`, transparent 45%)."""
+    gradient = QLinearGradient(QPointF(0, rect.top()), QPointF(0, rect.top() + rect.height() * 0.45))
+    gradient.setColorAt(0.0, QColor(255, 255, 255, alpha))
+    gradient.setColorAt(1.0, QColor(255, 255, 255, 0))
+    painter.fillPath(path, QBrush(gradient))
+
+
+def paint_ring(painter: QPainter, rect: QRectF, radius: float | None, color: QColor | QBrush,
+               width: float = 1.0) -> None:
+    """A ring `width` px wide inside the edge (CSS: a border, or inset 0 0 0 1px)."""
+    outer = shape_path(rect, radius)
+    r = _radius(rect, radius)
+    inner = shape_path(rect.adjusted(width, width, -width, -width), max(0.0, r - width))
+    painter.fillPath(outer.subtracted(inner), color)
+
+
+def paint_rim(painter: QPainter, rect: QRectF, radius: float | None, alpha: int) -> None:
+    """A line of light inside the top edge (CSS: inset 0 1px 0 0 white at `alpha`)."""
+    path = shape_path(rect, radius)
+    painter.fillPath(path.subtracted(path.translated(0, 1)), QColor(255, 255, 255, alpha))
+
+
+def paint_glint(painter: QPainter, rect: QRectF) -> None:
+    """The sign-in card's glint: a line a pixel high along the top, from 14 % to 86 % of the width,
+    clear at its ends, warm then cool at 42 %."""
+    left, right = rect.left() + rect.width() * 0.14, rect.right() - rect.width() * 0.14
+    gradient = QLinearGradient(QPointF(left, 0), QPointF(right, 0))
+    for at, token, alpha in ((0.0, theme.AURORA_WARM, 0), (0.35, theme.AURORA_WARM, 0x6B),
+                             (0.65, theme.AURORA_COOL, 0x6B), (1.0, theme.AURORA_COOL, 0)):
+        c = QColor(token)
+        c.setAlpha(alpha)
+        gradient.setColorAt(at, c)
+    painter.fillRect(QRectF(left, rect.top(), right - left, 1.0), QBrush(gradient))
+
+
+def paint_card(painter: QPainter, rect: QRectF, radius: float | None, fill: QColor | None = None,
+               aurora: float = 1.0, ring: int = 20, rim: int = 15, sheen: int = 0) -> None:
+    """A card drawn without a backdrop: an optional fill, the aurora, the sheen, the ring and the rim
+    (Artapa's glyph cards, the groups of the inspector)."""
+    path = shape_path(rect, radius)
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    if fill is not None:
+        painter.fillPath(path, fill)
+    if aurora > 0:
+        paint_aurora(painter, rect, path, aurora)
+    if sheen > 0:
+        paint_sheen(painter, rect, path, sheen)
+    if ring > 0:
+        paint_ring(painter, rect, radius, QColor(255, 255, 255, ring))
+    if rim > 0:
+        paint_rim(painter, rect, radius, rim)
+    painter.restore()
+
+
 # --------------------------------------------------------------------------- backdrop
 
-_capturing = 0  # > 0 while a backdrop is being rendered: glass inside it does not paint itself
+_capturing = 0  # > 0 while a backdrop is being rendered: frosted surfaces inside it do not paint themselves
 
 
 def capturing() -> bool:
@@ -391,7 +357,7 @@ def is_glass_layer(widget: QWidget) -> bool:
 def capture_backdrop(widget: QWidget, rect: QRect, dpr: float, base: QColor | None = None) -> QImage:
     """What lies beneath `rect` (in `widget`'s coordinates): the way the window paints itself, from
     the window down to `widget`'s parent, each ancestor's own background followed by its children
-    that lie below the path to `widget`; glass is left out. Device pixels, premultiplied."""
+    that lie below the path to `widget`; frosted surfaces are left out. Device pixels, premultiplied."""
     global _capturing
     img = QImage(max(1, round(rect.width() * dpr)), max(1, round(rect.height() * dpr)), FMT)
     img.setDevicePixelRatio(dpr)
@@ -437,9 +403,9 @@ def capture_backdrop(widget: QWidget, rect: QRect, dpr: float, base: QColor | No
 
 class SharedBackdrop:
     """Renders `widget` (the content beneath the floating bars) once per paint pass for all the
-    glass above it: the first request renders a full-width band around itself, later requests of
-    the same pass are cut from it. Without it every bar would render the same thumbnails again.
-    Set as the widget's `glass_backdrop`, which `capture_backdrop` asks first."""
+    frosted surfaces above it: the first request renders a full-width band around itself, later
+    requests of the same pass are cut from it. Without it every bar would render the same thumbnails
+    again. Set as the widget's `glass_backdrop`, which `capture_backdrop` asks first."""
 
     SLACK = 24  # px above and below a band, so the neighbouring bars' requests fall inside it
     LIFE = 0.1  # s: a band belongs to one paint pass, which ends when the event loop turns (or after this)
@@ -489,24 +455,19 @@ class SharedBackdrop:
 # ----------------------------------------------------------------------------- glass
 
 
-def render_glass(backdrop: QImage, margin: int, w: int, h: int, radius_px: float, mat: Material,
+def margin_of(mat: Material) -> int:
+    """How far around a surface its backdrop is read (logical px): two standard deviations of the
+    blur, which hold 95 % of its weight (three cost Gözat's scrolling a fifth more, measured)."""
+    return int(2 * mat.blur + 2)
+
+
+def render_glass(backdrop: QImage, margin: int, w: int, h: int, mat: Material,
                  dpr: float) -> tuple[QImage, float]:
-    """The glass body (device px, without the veil and the edge) from a backdrop that is `margin`
-    device pixels larger than the surface on every side, and the backdrop's mean luminance (0–1)."""
+    """The frosted backdrop of a w×h (device px) surface, from a backdrop that is `margin` device pixels
+    larger on every side, and the backdrop's mean luminance (0–1, for adaptive materials)."""
     source = backdrop.convertToFormat(FMT)
     source.setDevicePixelRatio(1.0)  # (device pixels throughout)
-    inner = QRect(margin, margin, w, h)  # the surface; the margin only feeds the blur
-    out = frost(source, mat.frost * dpr, mat.vivid, inner)
-    if mat.sharp > 0:  # the faint, nearly sharp copy over the wide cloud
-        p = QPainter(out)
-        p.setOpacity(mat.sharp)
-        p.drawImage(QRectF(0, 0, w, h), source, QRectF(inner))
-        p.end()
-    if mat.bezel > 0:
-        opt = optics(w, h, radius_px / dpr, mat, dpr)
-        if opt.yy.size:
-            a = pixels(out)
-            a[opt.yy, opt.xx] = a[opt.syi, opt.sxi]  # (fancy indexing reads a copy first)
+    out = frost(source, mat.blur * dpr, mat.saturate, QRect(margin, margin, w, h))
     luminance = 0.0
     if mat.adaptive:
         small = pixels(out)[:: max(1, h // 24), :: max(1, w // 48), :3].astype(np.float32)
@@ -515,27 +476,22 @@ def render_glass(backdrop: QImage, margin: int, w: int, h: int, radius_px: float
 
 
 def veil(mat: Material, luminance: float) -> QColor:
-    """The veil over the frosted backdrop; adaptive glass grows darker over bright backdrops (up to
-    72 % over white, which keeps white symbols at about 4.5:1)."""
+    """The veil over the frosted backdrop; adaptive materials grow darker over bright backdrops."""
     r, g, b, a = mat.tint
     if mat.adaptive:
-        t = min(1.0, max(0.0, (luminance - 0.2) / 0.5))
+        t = min(1.0, max(0.0, (luminance - 0.15) / 0.45))
         t = t * t * (3 - 2 * t)
-        return QColor(r, g, b, int(a + (184 - a) * t))
+        return QColor(r, g, b, int(a + (mat.adaptive - a) * t))
     return QColor(r, g, b, a)
 
 
 def paint_glass(painter: QPainter, rect: QRectF, image: QImage | None, mat: Material, radius: float | None,
-                dpr: float, extra_tint: QColor | None = None, luminance: float = 0.0,
-                clip: QRectF | None = None) -> None:
-    """Draws a glass surface: the refracted backdrop (`image`, device px, or None for solid glass),
-    the veil, an optional extra tint (hover, press) and the highlight of the edge. The contour lies
-    outside the shape: `paint_contour` draws it, beneath. `clip`: the part of the surface that is
-    visible (panels that run past the window's edge show no edge there)."""
+                dpr: float, extra_tint: QColor | None = None, luminance: float = 0.0) -> None:
+    """Draws a surface: the frosted backdrop (`image`, device px) under its veil, or a solid fill (an
+    opaque material, or `image` None), then the aurora, the sheen, an optional extra tint (hover), the
+    ring, the rim and the glint."""
     path = shape_path(rect, radius)
     painter.save()
-    if clip is not None:
-        painter.setClipRect(clip)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
     if image is not None:
@@ -545,48 +501,31 @@ def paint_glass(painter: QPainter, rect: QRectF, image: QImage | None, mat: Mate
         painter.drawPath(path)
         painter.fillPath(path, veil(mat, luminance))
     else:
-        r, g, b = mat.solid
-        painter.fillPath(path, QColor(r, g, b))  # opaque, so text on it keeps ClearType
+        r, g, b, a = mat.tint
+        fill = QColor(r, g, b) if a == 255 and not reduce_transparency() else QColor(*mat.solid)
+        painter.fillPath(path, fill)  # opaque, so text on it keeps ClearType
+    if mat.aurora > 0:
+        paint_aurora(painter, rect, path, mat.aurora)
+    if mat.sheen > 0:
+        paint_sheen(painter, rect, path, mat.sheen)
     if extra_tint is not None:
         painter.fillPath(path, extra_tint)
-    if mat.highlight > 0:
-        e = _edges_for(rect, radius, mat, dpr)
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
-        painter.drawImage(rect.topLeft() - QPointF(e.pad / dpr, e.pad / dpr), _with_dpr(e.highlight, dpr))
+    if mat.ring > 0:
+        paint_ring(painter, rect, radius, QColor(255, 255, 255, mat.ring))
+    if mat.rim > 0:
+        paint_rim(painter, rect, radius, mat.rim)
+    if mat.glint:
+        paint_glint(painter, rect)
     painter.restore()
 
 
-def paint_contour(painter: QPainter, rect: QRectF, radius: float | None, mat: Material, dpr: float) -> None:
-    """The thin dark contour just outside a glass shape (draw it before, beneath, the glass)."""
-    if max(mat.contour) <= 0:
-        return
-    e = _edges_for(rect, radius, mat, dpr)
-    painter.drawImage(rect.topLeft() - QPointF(e.pad / dpr, e.pad / dpr), _with_dpr(e.contour, dpr))
-
-
-def _edges_for(rect: QRectF, radius: float | None, mat: Material, dpr: float) -> _Edges:
-    w, h = max(1, round(rect.width() * dpr)), max(1, round(rect.height() * dpr))
-    r = min(rect.width(), rect.height()) / 2 if radius is None else radius
-    return edges(w, h, r, mat, dpr)
-
-
-def _with_dpr(image: QImage, dpr: float) -> QImage:
-    out = QImage(image)
-    out.setDevicePixelRatio(dpr)
-    return out
-
-
 class GlassRenderer:
-    """Draws the glass of one widget, reusing the last image while the backdrop stays the same.
-    `bleed` (left, top, right, bottom): how far the surface runs past the widget's edges, for
-    panels that reach the window's edge (no edge there, as in macOS 27's sidebars)."""
+    """Draws the surface of one widget, reusing the last frosted image while the backdrop stays the same."""
 
-    def __init__(self, widget: QWidget, kind: str, radius: float | None = None,
-                 bleed: tuple[int, int, int, int] = (0, 0, 0, 0)):
+    def __init__(self, widget: QWidget, kind: str, radius: float | None = None):
         self.widget = widget
         self.kind = kind
         self.radius = radius  # None: capsule
-        self.bleed = bleed
         self._last_backdrop: QImage | None = None
         self._last: QImage | None = None
         self._luminance = 0.0
@@ -599,7 +538,7 @@ class GlassRenderer:
         return material(self.kind)
 
     def margin(self, mat: Material) -> int:
-        return int(mat.frost * 1.5 + 2)
+        return margin_of(mat)
 
     def luminance(self) -> float:
         """The mean luminance of the backdrop at the last paint (adaptive materials only)."""
@@ -610,29 +549,23 @@ class GlassRenderer:
         rect = QRectF(widget.rect()) if rect is None else rect
         if rect.width() < 2 or rect.height() < 2:
             return
-        clip = None
-        if any(self.bleed):
-            left, top, right, bottom = self.bleed
-            clip = QRectF(rect)
-            rect = rect.adjusted(-left, -top, right, bottom)
         mat = self.material()
         dpr = widget.devicePixelRatioF() or 1.0
-        if reduce_transparency():
-            paint_glass(painter, rect, None, mat, self.radius, dpr, extra_tint, clip=clip)
+        if reduce_transparency() or mat.blur <= 0:
+            paint_glass(painter, rect, None, mat, self.radius, dpr, extra_tint)
             return
         image = self._image(rect, mat, dpr)
-        paint_glass(painter, rect, image, mat, self.radius, dpr, extra_tint, self._luminance, clip)
+        paint_glass(painter, rect, image, mat, self.radius, dpr, extra_tint, self._luminance)
 
     def _image(self, rect: QRectF, mat: Material, dpr: float) -> QImage:
         w, h = max(1, round(rect.width() * dpr)), max(1, round(rect.height() * dpr))
         m = self.margin(mat)
         area = rect.toAlignedRect().adjusted(-m, -m, m, m)
-        radius = (min(rect.width(), rect.height()) / 2 if self.radius is None else self.radius) * dpr
-        key = (w, h, round(radius, 2), self.kind, theme.is_dark(), _level, round(dpr, 3))
+        key = (w, h, self.kind, round(dpr, 3))
         backdrop = capture_backdrop(self.widget, area, dpr)
         if self._last is not None and key == self._key and self._last_backdrop == backdrop:
             return self._last
-        self._last, self._luminance = render_glass(backdrop, round(m * dpr), w, h, radius, mat, dpr)
+        self._last, self._luminance = render_glass(backdrop, round(m * dpr), w, h, mat, dpr)
         self._last_backdrop = backdrop
         self._key = key
         return self._last
@@ -645,11 +578,12 @@ _SHADOWS: OrderedDict[tuple, QImage] = OrderedDict()
 
 
 def shadow_image(w: float, h: float, radius: float | None, mat: Material, dpr: float) -> tuple[QImage, int]:
-    """A soft shadow for a w×h surface (logical px) and its margin (logical px)."""
-    blur_px = mat.shadow_blur
-    margin = int(blur_px + abs(mat.shadow_y) + 2)
-    key = (round(w), round(h), None if radius is None else round(radius, 1), blur_px, mat.shadow_y, mat.shadow,
-           round(dpr, 3))
+    """The drop shadow of a w×h surface (logical px), as CSS's box-shadow draws it (offset, blur radius,
+    spread), and its margin (logical px)."""
+    blur_px, spread = mat.shadow_blur, mat.shadow_spread
+    margin = int(blur_px + abs(mat.shadow_y) + max(0.0, spread) + 2)
+    key = (round(w), round(h), None if radius is None else round(radius, 1), blur_px, mat.shadow_y, spread,
+           mat.shadow, round(dpr, 3))
     hit = _SHADOWS.get(key)
     if hit is not None:
         _SHADOWS.move_to_end(key)
@@ -661,10 +595,13 @@ def shadow_image(w: float, h: float, radius: float | None, mat: Material, dpr: f
     p = QPainter(img)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.scale(dpr * scale, dpr * scale)
-    p.fillPath(shape_path(QRectF(margin, margin + mat.shadow_y, w, h), radius), QColor(0, 0, 0, 255))
+    shape = QRectF(margin, margin + mat.shadow_y, w, h).adjusted(-spread, -spread, spread, spread)
+    r = None if radius is None else max(0.0, radius + spread)
+    if shape.width() > 0 and shape.height() > 0:
+        p.fillPath(shape_path(shape, r), QColor(0, 0, 0, 255))
     p.end()
     a = pixels(img)[..., 3].astype(np.float32)
-    a = blur(a, max(1, round(blur_px * dpr * scale / 2.4)))
+    a = blur(a, max(1, round(blur_px / 2 * dpr * scale)))  # CSS: a Gaussian of half the blur radius
     alpha = np.clip(a * mat.shadow, 0, 255).astype(np.uint8)
     out = np.zeros((sh, sw, 4), np.uint8)
     out[..., 3] = alpha
@@ -678,8 +615,7 @@ def shadow_image(w: float, h: float, radius: float | None, mat: Material, dpr: f
 
 
 class ShadowLayer(QWidget):
-    """What a glass surface casts around itself: its faint shadow and the dark contour of its edge.
-    A sibling just beneath the surface that takes no mouse input."""
+    """The shadow a surface casts: a sibling just beneath the surface that takes no mouse input."""
 
     glass_layer = True
 
@@ -691,23 +627,15 @@ class ShadowLayer(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._margin = 0
 
-    def _needed(self, mat: Material) -> int:
-        """The margin around the surface this layer needs, or 0 if it draws nothing."""
-        dpr = self.surface.devicePixelRatioF() or 1.0
-        margin = 0
-        if mat.shadow > 0:
-            margin = shadow_image(self.surface.width(), self.surface.height(), self.surface._glass.radius, mat,
-                                  dpr)[1]
-        if max(mat.contour) > 0:
-            margin = max(margin, math.ceil(2 / dpr) + 1)
-        return margin
-
     def sync(self) -> None:
         surface = self.surface
         if self.parentWidget() is not surface.parentWidget():
             self.setParent(surface.parentWidget())
         mat = surface._glass.material()
-        margin = self._needed(mat) if surface.casts_shadow else 0
+        margin = 0
+        if surface.casts_shadow and mat.shadow > 0:
+            dpr = surface.devicePixelRatioF() or 1.0
+            margin = shadow_image(surface.width(), surface.height(), surface._glass.radius, mat, dpr)[1]
         if not surface.isVisible() or margin <= 0:
             self.hide()
             return
@@ -724,24 +652,21 @@ class ShadowLayer(QWidget):
         renderer: GlassRenderer = surface._glass
         mat = renderer.material()
         dpr = surface.devicePixelRatioF() or 1.0
+        image, margin = shadow_image(surface.width(), surface.height(), renderer.radius, mat, dpr)
         p = QPainter(self)
-        if mat.shadow > 0:
-            image, margin = shadow_image(surface.width(), surface.height(), renderer.radius, mat, dpr)
-            p.drawImage(QPointF(self._margin - margin, self._margin - margin), image)
-        rect = QRectF(self._margin, self._margin, surface.width(), surface.height())
-        paint_contour(p, rect, renderer.radius, mat, dpr)
+        p.drawImage(QPointF(self._margin - margin, self._margin - margin), image)
 
 
 class GlassSurface(QWidget):
-    """A glass panel or bar; its children (labels, buttons, lists) are drawn on top of the glass.
-    Children should not paint a background of their own."""
+    """A card or a bar; its children (labels, buttons, lists) are drawn on top of it. Children should
+    not paint a background of their own."""
 
     def __init__(self, parent: QWidget | None = None, kind: str = BAR, radius: float | None = None,
-                 shadow: bool = True, bleed: tuple[int, int, int, int] = (0, 0, 0, 0)):
+                 shadow: bool = True):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         self.setAutoFillBackground(False)
-        self._glass = GlassRenderer(self, kind, radius, bleed)
+        self._glass = GlassRenderer(self, kind, radius)
         self.casts_shadow = shadow
         self._shadow: ShadowLayer | None = None
         self._syncing = False
@@ -771,7 +696,7 @@ class GlassSurface(QWidget):
         if self.parentWidget() is None or self._syncing:
             return
         if self._shadow is None:
-            if not self.casts_shadow:
+            if not self.casts_shadow or self._glass.material().shadow <= 0:
                 return
             self._shadow = ShadowLayer(self)
         self._syncing = True

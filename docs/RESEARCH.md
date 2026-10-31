@@ -13,10 +13,11 @@ rotation/cropping (§6d) and **videos** (§6e: metadata removal, conversion to M
 Version 1.1 added the exposure of RAW photos (§4c), trimming videos without re-encoding (§6e, "Trimming") and a
 light/dark theme (§6f). Version 1.2 added the exposure of other photos (§4c), keeping wide color spaces (§4d),
 removing parts of a video (§6e, "Removing parts") and the open-source release (§11). Version 1.3 moved the
-interface to Apple's Liquid Glass design as iOS 27 draws it, in black, white and grey with the Inter typeface
-(§6f), and added keeping the capture date, date-based names, a warning
+interface to Apple's Liquid Glass design as iOS 27 draws it, in black, white and grey with the Inter typeface,
+and added keeping the capture date, date-based names, a warning
 for file names that give something away, shrinking photos, finding duplicates, removing a video's sound, the
-horizontal flip and a before/after view (§6g).
+horizontal flip and a before/after view (§6g). Since then the interface has taken the look of Artapa's website,
+dark only, with the Onest typeface (§6f).
 
 Most decisions are based not on assumptions but on **measurements**: the actual behavior of the libraries was
 verified from their source code and through experiments; the results are given in this document with their figures.
@@ -797,112 +798,118 @@ is read from the start if necessary.
 
 ---
 
-## 6f. The interface: Liquid Glass, light and dark
+## 6f. The interface: Artapa's look
 
-Version 1.3 moved the interface to Apple's Liquid Glass, in the form iOS 27 gives it (2026): thin edges and a calm
-body rather than strong optics. Where glass goes and how it behaves come from Apple's Human Interface Guidelines and
-the WWDC 2025 and 2026 sessions. Apple publishes no figures for the material, and WWDC 2026 gave none either; the
-figures below come from pixel measurements of iOS 27 on a device and in the simulator (over black, white and grey)
-and from Apple's iOS 27 design kit as third parties transcribed it (sources in §12).
+Fotodit wears the look of Artapa's website (artapa.com): dark, quiet greys, frosted pills, silver buttons, thin
+rings of light and the Onest typeface. It replaced version 1.3's Liquid Glass (Apple's design as iOS 27 draws it).
+Qt Widgets has none of CSS's tools, so Fotodit draws the site's CSS with Qt's painter (`ui/glass.py`,
+`ui/controls.py`): the same colors, radii, blurs, gradients and shadows, with the values of the site's style sheets.
 
-**Where glass goes.** Glass is the layer of controls that floats above the content, never the content itself: the
-sidebar and the inspector (edge to edge and without a shadow, as in macOS 27), the toolbar capsules, the
-segmented control, the bars of the large preview and the sheets. The grid, the table and the photos stay plain.
-Glass never shows glass: a surface leaves other glass out when it samples what lies beneath it. Following Apple's
-toolbar rules, neighbouring buttons share one capsule, text buttons and symbol buttons get separate capsules, and
-the one primary action ("N fotoğrafı işle", process N photos) is prominent: solid ink, near black in light mode and
-near white in dark mode. When a bar does not fit, its buttons first lose their text (the first one last), then
-whole groups step aside; their commands stay in the context menus.
+**Layout.** The window is the calm stage of the site's admin panel: #070707 with a faint light from the top left
+(#D8D8DB at 11%, gone at 70% of an ellipse 60% of the window wide and 55% high) and a fainter one from the bottom
+right (#E2E0DD at 7%), plus a grain of one grey level on every other pixel, which keeps the light from banding as a
+browser's dithering does. The sidebar and the inspector are cards on it, inset 10 px, with 24 px corners, as the admin
+panel's sidebar: surface-1 (#0D0D0D) under the aurora (a warm light from the top left, #FEEAE1 at 4.3%, and a cool one
+from the bottom right, #C0CEF2 at 3.9%), a ring a pixel wide of white at 8% and a line of light inside the top edge
+(white at 6%). The groups of options are smaller cards inside it, their 16 px corners concentric with the card's
+padding. Over the content the toolbars float as the site's header pills, and the content scrolls beneath them.
+Neighbouring buttons share one pill, text buttons and symbol buttons get separate pills, and the one primary action
+("N fotoğrafı işle", process N photos) is the site's silver button. When a bar does not fit, its buttons first lose
+their text (the first one last), then whole groups step aside; their commands stay in the context menus.
 
-**How it is drawn.** Qt Widgets has no backdrop filter, so a glass surface draws itself (`ui/glass.py`):
+**How the frosted surfaces are drawn.** What lies under a surface, plus a margin of two standard deviations of its
+blur, is rendered into an image (the parent's background and the widgets beneath it, or the large preview's own
+picture of its stage), blurred with a Gaussian of the CSS radius on a reduced copy, saturated as CSS's saturate()
+does, and laid under the surface's veil; the aurora, the sheen, the ring, the line of light and, on dialogs, a glint
+come on top. Shadows follow CSS's box-shadow (offset, blur and spread). Each kind copies an element of the site:
 
-1. *Backdrop.* What lies under the surface, plus a margin, is rendered into an image: the parent's background and
-   the widgets beneath it (`QWidget.render`), or the large preview's own picture of the photo.
-2. *Frost, two paths.* A wide blur (σ about a quarter of a bar's height, computed on a reduced copy) mixed with
-   about 30% of the backdrop left sharp, as measured on iOS 27: what lies behind reads as a soft cloud with a trace
-   of its detail. A single medium blur, the usual imitation, leaves recognizable blobs.
-3. *Lens.* The outer half of the corner radius is the edge of a plano-convex lens with a convex squircle profile,
-   h(x) = T·(1 − (1 − x)⁴)^¼. For each pixel of that band, a ray from the eye is refracted into the glass (Snell's
-   law, index 1.5) and followed through its thickness; the pixel shows the backdrop where the ray lands, so content
-   near the edge is pulled inward. Through the frost this reads as the soft bend iOS 27 shows (the measured contrast
-   through the band is 0.13 to 0.16), not as a magnifying glass. The displacements depend only on the shape, so
-   they are computed once per size and cached.
-4. *Veil.* The measured iOS 27 values: (243, 243, 243) at 55% on buttons and bars in light mode, (77, 77, 77) at
-   42% in dark mode; the sidebar and the inspector are denser (78%). Glass over photos darkens itself over bright
-   images, up to a dark veil of 72%, which keeps white symbols at about 4.5:1.
-5. *Edge, with no line all around.* A specular highlight comes from straight above and is added to whatever lies
-   beneath (not blended): 0.25 in the outermost pixel, half of that 0.8 pt in and a tenth 1.8 pt in, as bright on
-   the bottom edge as on the top, and fading toward the sides with (1 − θ/90°)^1.33, θ being the angle of the
-   edge's normal from the vertical. A thin dark contour lies just outside the shape (0.5 pt) and darkens what is
-   next to it: in light mode from 8% at the top and bottom to 31% at the sides, in dark mode from 0 to 61%, with
-   (1 − |cos θ|)^0.75. Over white the contour draws the shape, over black the highlights do.
-6. *Shadow.* Buttons and bars cast almost none (3 to 5% in light mode, at most 6% in dark mode); only the sheets
-   keep a large, soft shadow.
+| Surface | The site's element | Blur, saturation | Veil | Edge, light, shadow |
+|---|---|---|---|---|
+| Toolbars | header pill | 18 px, 1.4 | rgb(30 30 30) at 50%, up to 90% over bright content | ring 6% |
+| Bars over photos | floating pill | 34 px, 1.45 | #0A0A0A at 74% | ring 7.5%, rim 6%, shadow 0 16 40 −18 at 70% |
+| Dialogs | sign-in card | 26 px, 1.35 | #0C0C0C at 50%, sheen, aurora | ring 8%, rim 6%, glint, shadow 0 30 70 −40 at 90% |
+| Short messages | toast | 18 px, 1.4 | rgb(30 30 30) at 86% | ring 8% |
+| Round buttons over photos | round play button | 14 px | rgb(12 12 12) at 42% | ring 17%, rim 6% |
 
-The first version of the 1.3 glass looked fake for exactly the reasons the measurements name: a bright line ran
-all around the shape, a darker line lay inside the edge, the highlight sat a little inside the edge like a bead,
-the blur was a single medium one, and the shadows were heavy. None of these is left.
+A toolbar's veil darkens over bright content, so its words stay legible: at its darkest the secondary text keeps
+5.1:1 over white. A surface reuses its last image while its backdrop is unchanged (a hover on one of its buttons, for
+example), and the toolbars above the grid share one rendering of it per frame. One scroll step in "Gözat" takes 27 ms
+(version 1.3's glass: 25 ms, measured the same way on the same day) and 11 to 12 ms with "Saydamlığı azalt" (median of
+75 steps of 4 pixels in a 1440 × 880 window holding 240 photos); reading three standard deviations around each pill
+instead of two made it 31 ms.
 
-**Speed.** A surface reuses its last image while its backdrop is unchanged (a hover on one of its buttons, for
-example). When the backdrop changes, redrawing takes 5.0 ms for a 320 × 40 toolbar capsule and 9.7 ms for a
-620 × 40 one at 125% display scaling on this computer (median of 40 frames): the blur and the sharp copy are
-computed only for the surface itself, not for the margin around it. Scrolling "Gözat" moves the thumbnails under
-four glass bars, which used to render the same thumbnails four times per frame; they now share one rendering per
-frame, and the grid draws each tile once and then copies it. One scroll step takes 27 ms (35 ms in the first 1.3
-build, 57 ms with the new glass before these changes), and 11 ms with "Saydamlığı azalt" (median of 75 steps of
-4 pixels in a 1440 × 880 window).
+**Bar on scroll.** As the site's header does, once the content scrolls beneath the toolbars a strip fades in behind
+them: the content blurred and darkened toward the page's color (#060606 at 34% at the top), both fading out toward its
+foot, so file names never run under the toolbars' text.
 
-**Uniform bar on scroll.** As in iOS 27, once the content scrolls beneath the floating bars, a frosted strip fades in
-behind them in 0.25 s (white at 85% in light mode, black at 55% in dark mode, with a hairline of 5% or 10% under
-it), so file names never run under the bars' text.
+**Over photos.** The large preview is the site's dark page (#060606) with the calm stage's light: a neutral stage on
+which nothing sways how a photo's colors look (version 1.3's background extension, a blurred copy of the photo behind
+it, is gone). Its bars are floating pills; the edge arrows and the play button are the site's round glass buttons.
+While a video plays, the controls step aside after 2.6 s without mouse movement and come back when the mouse moves.
 
-**Glass over photos.** The large preview is a dark stage. Behind the photo lies Apple's background extension: a
-blurred, darkened copy of the photo fills the window, so the bars float over the picture's own colors. While a
-video plays, the controls step aside after 2.6 s without mouse movement and come back when the mouse moves.
-
-**Controls.** The selection of the segmented control slides between its segments; the knob of a switch and the
-thumb of a slider move on springs, and a slider's thumb turns into a glass lens while it is dragged. A pressed
-glass button swells by a pixel and lights up from under the pointer. Sheets (the confirmation, the progress and
-results, About) are glass cards over the dimmed window, with the default action as the prominent button (Enter)
-and Esc to cancel. Short messages appear in a glass capsule above the bottom bar. Pop-up buttons show their
-chevron and number boxes their step arrows. A choice too long for its box ends in "…", and the list opens wide
-enough to show every choice in full; a column title that does not fit ends the same way. The mouse wheel over a
-pop-up button or a number box scrolls the panel rather than changing the setting under the pointer (as on macOS),
-and a number box takes the wheel only once it has been clicked.
+**Controls.**
+* *The silver button,* the primary action: white at 5.5% over what lies behind it (12.5% under the pointer), a line of
+  light inside its top edge, a glow rising inside its foot (CSS `inset 0 −14px 24px −16px`, white at 16%; `−21px 46px`
+  under the pointer) and an edge a pixel wide, a gradient at 140° from white at 62% through 6% at 38% and nothing at
+  60% to 34% at its end, shown at 58% (whole under the pointer). Its icon sits in the site's silver circle (#FFFFFF,
+  #E6E7EE at 55%, #C9CCD6) at its end. Pressed, it shrinks to 97%; disabled, it is at half strength.
+* *The secondary button:* a ring of white at 8% (16% under the pointer) round a wash of 5% (9%), with a cool glow
+  rising inside its foot under the pointer. *The red button,* for what ends something: the site's danger, #FF8585 on
+  #FF5A5A at 6% in a ring of it at 28%.
+* *Toolbar buttons and tabs* are the header's links: secondary text, white at 6% under the pointer and 10% when on or
+  chosen; the chosen tab's light slides to it on a spring.
+* *Switches:* off, a well in a ring with a grey knob; on, the site's switch: the premium gradient (#BCC0CA, #FEEAE1,
+  #C0CEF2) with a line of light at its top and a knob in the page's color. *Check boxes and radio buttons:* a well in
+  a ring; checked, the accent (#E8EAEF) with a dark tick. *Fields:* wells (white at 5%, 7.5% under the pointer), ringed
+  at 16% while they hold the keyboard. *Sliders:* the accent fills the track, and the thumb is a silver circle that
+  grows a little while it is dragged.
+* *Sheets* (the confirmation, the progress and results, About) are the site's sign-in card over the window, which is
+  blurred 14 px and dimmed (rgb(5 5 5) at 60%) as the site's dialogs dim their page. A sheet's icon sits on the site's
+  tile, the default action is the silver button (Enter) and Esc cancels; the progress bar is the premium gradient.
+  Short messages appear on a toast above the bottom bar. Menus are a dark panel in a faint ring with 12 px corners;
+  scroll bars are thin pills of white at 16%.
+* *Thumbnails* keep the corners of the site's card media (9 px). A chosen one is ringed in the accent and its check
+  sits in a silver circle; an edited one carries the site's badge ("düzenlendi" in a ring of the premium gradient).
+* Pop-up buttons show their chevron and number boxes their step arrows. A choice too long for its box ends in "…",
+  and the list opens wide enough to show every choice in full; a column title that does not fit ends the same way.
+  The mouse wheel over a pop-up button or a number box scrolls the panel rather than changing the setting under the
+  pointer (as on macOS), and a number box takes the wheel only once it has been clicked.
 
 **Motion.** Springs use Apple's two parameters, response and damping ratio (with a mass of 1: stiffness =
 (2π / response)², damping = 4π · ratio / response). Hover and press feedback is critically damped; the sliding
-selection, a switch's knob and a slider's lens settle with a slight overshoot (damping ratio 0.82 to 0.9). Every
-animation starts from the value on screen, so it can be interrupted at any moment. When Windows' animation effects
-are turned off, everything moves without animation.
+selection and a switch's knob settle with a slight overshoot (damping ratio 0.82 to 0.86). Every animation starts from
+the value on screen, so it can be interrupted at any moment. When Windows' animation effects are turned off,
+everything moves without animation.
 
 **Icons.** SF Symbols may only be used on Apple's platforms. Fotodit uses 48 icons of Hugeicons' free set (MIT, the
-"stroke rounded" style: one stroke width and round ends everywhere, close to SF Symbols' regular weight and to Inter's
-rounded shapes), taken unchanged from the npm package `@hugeicons/core-free-icons` 4.3.5 into
-`resources/icons/hugeicons.json`. `ui/icons.py` reads their SVG path data (every command, arcs included) into Qt
-paths and draws them in the theme's colors, so they stay sharp at every size and display scale; the play and pause
-glyphs are drawn filled, like SF Symbols' ".fill" variants. The set covers every icon the app needs (Lucide, the
-fallback, was not needed); 14 old drawn icons that no screen used any more were dropped. Animate UI's animated
-icons were the starting point, but their license is MIT with the Commons Clause, which conflicts with the GPL,
-so the motion is Fotodit's own: under the pointer an arrow nudges the way it points, a rotate or
-refresh arrow turns, a plus or a cross spins a quarter, a magnifier or the full-screen arrows grow, the flip icon
+"stroke rounded" style: one stroke width and round ends everywhere, close to the line icons of Artapa's site), taken
+unchanged from the npm package `@hugeicons/core-free-icons` 4.3.5 into `resources/icons/hugeicons.json`.
+`ui/icons.py` reads their SVG path data (every command, arcs included) into Qt paths and draws them in the theme's
+colors, so they stay sharp at every size and display scale; the play and pause glyphs are drawn filled. The set covers
+every icon the app needs (Lucide, the fallback, was not needed); 14 old drawn icons that no screen used any more were
+dropped. Animate UI's animated icons were the starting point, but their license is MIT with the Commons Clause, which
+conflicts with the GPL, so the motion is Fotodit's own: under the pointer an arrow nudges the way it points, a rotate
+or refresh arrow turns, a plus or a cross spins a quarter, a magnifier or the full-screen arrows grow, the flip icon
 turns over, the rest grow by 8%. The button's hover spring drives the motion (critically damped, so it follows the
 pointer and turns back midway without bouncing), and with Windows' animation effects off the icons stay still.
 
-**Typeface.** SF Pro may only be used on Apple's platforms too. Fotodit ships Inter 4.1 (SIL Open Font License), a
-typeface drawn for screens, with a tall x-height and open shapes, in its hinted static faces (Regular, Medium,
-SemiBold, Bold) at 9.5 pt; the variable version runs into a Qt 6.11 bug (QTBUG-149199). At 125% and 150%
-display scaling Qt hints only small text and leaves larger text unhinted, which blurs titles; Fotodit asks for
-vertical hinting at every size there, which keeps lines on the pixel grid without crowding the letters. Windows gives
-lists, trees, tables, menus and tooltips fonts of their own (Segoe UI 9), which come back with every style sheet
-change, so Fotodit sets them to Inter after each one. Digits are Inter's own; counters, timers and the date column
-of "Seçilenler" use tabular digits so they do not shift (Inter's tabular forms widen hyphens and would spread out
-file names such as `C--Users`). Contextual alternates are off: they would turn the "->" of a file name into an
-arrow. Names on the tiles keep their weight when selected, so they never jump or get shortened on a click.
-Headings (the panels' titles, the operations, column and tab names, sheet titles) and buttons are set in Inter
-Bold and in title case: every word capitalized except conjunctions and particles ("Sırala ve Yeniden Adlandır",
-"Liste Boşaltılsın mı?"; in English "Group into Folders"), the Turkish way with a dotted capital İ ("Videoyu
-İşle"). Menu items, check boxes, radio buttons and sentences keep sentence case.
+**Typeface.** Onest 2.001 (SIL Open Font License), the typeface Artapa sets its text in, in its hinted static faces
+(Regular, Medium, SemiBold) at 9.75 pt, 13 px at 100%; the variable version runs into a Qt 6.11 bug (QTBUG-149199).
+The site's other face, General Sans, is not used: its license (ITF Free Font License 2.0) forbids handing the font on
+through a public repository or server, and Fotodit's source is public. Headings (the panels' titles, the operations,
+sheet titles) are set in SemiBold; buttons, tabs and column names in Medium; never a light weight. Bold is SemiBold:
+Onest has no heavier face, and asked for 700, Qt thickens the 600 itself, which widens and coarsens the letters, so
+every bold text asks for 600. At 125% and 150% display scaling Qt hints only small text and leaves larger text
+unhinted, which blurs titles; Fotodit asks for vertical hinting at every size there. Measured with Windows' own
+renderer (DirectWrite) at 125%, it gave the sharpest edges and the fewest colored pixels of the settings Qt offers
+(full hinting also spaces the letters unevenly). Windows gives lists, trees, tables, menus and tooltips fonts of their
+own (Segoe UI 9), which come back with every style sheet change, so Fotodit sets them to Onest after each one. Digits
+are Onest's own (its narrow 1 reads better in running text); counters, timers and the date column of "Seçilenler" use
+tabular digits so they do not shift. Contextual alternates are off: they would turn the "->" of a file name into an
+arrow. Names on the tiles keep their weight when selected, so they never jump or get shortened on a click. Headings,
+tab, column and button names are in title case: every word capitalized except conjunctions and particles ("Sırala ve
+Yeniden Adlandır", "Liste Boşaltılsın mı?"; in English "Group into Folders"), the Turkish way with a dotted capital İ
+("Videoyu İşle"). Menu items, check boxes, radio buttons and sentences keep sentence case.
 
 **Languages.** The interface is in Turkish and English. Every text a person reads lives in two dictionaries,
 `fotodit/i18n/tr.json` and `en.json`, and reaches the screen through `t(key, …)`: placeholders fill in names and
@@ -918,36 +925,28 @@ for Turkish. The tests check that both dictionaries hold the same keys and place
 names exists and none is left unused, that no Turkish text and no word written straight into a label is left in
 the code, and that the whole window in English shows no Turkish.
 
-**Color: black, white and grey.** The interface has no accent color. Ink (near black in light mode, near white in
-dark mode) marks what is on or chosen: the primary button, switches that are on, check marks, selected thumbnails;
-greys carry everything else, and selected rows get a grey fill. Only warnings (orange) and errors (red) keep a
-color, together with a symbol, so that color is never the only sign. The large preview keeps its dark stage in both
-variants (photos are judged on a dark background).
+**Color.** Artapa's: a near-black page (#060606; the stage #070707), two surfaces (#0D0D0D, #141414), three tones of
+text (#F5F5F5, #A6A6A6, #868686) and white at low opacities for wells, lines and light. What is on or chosen takes the
+site's accent (#E8EAEF): check marks, slider fills, the ring of a chosen thumbnail. A few soft tones appear where the
+site uses them: the premium gradient on progress bars, on switches that are on and on the bar of the open folder;
+peach on the edge of the selected row of "Seçilenler"; periwinkle for edits; the aurora on the cards. Warnings (the
+site's amber, #F4C983), errors (its red, #FF7676) and success (its green, #86E3B5) always come with a symbol too, so
+color is never the only sign.
 
-**Looks and accessibility.** Like iOS (a choice of clear or tinted since 26.1, a slider in iOS 27), "Görünüm"
-(appearance) offers three looks for the glass: "Cam:
-Daha şeffaf" (clearer: a thinner veil, twice the sharp share, less blur), "Varsayılan" (default) and "Daha buzlu"
-(frostier: a veil of at least 74%, no sharp copy, more blur). "Saydamlığı azalt" (reduce transparency) turns every
-glass surface into a solid one with the same edge, like Apple's setting of the same name. It is Fotodit's own
-setting rather than Windows' "Transparency effects": many Windows 10 machines have those turned off for the
-taskbar's sake, which would hide the material entirely. Focus rings appear after keyboard navigation (Tab), not
-after a click.
+**Dark only.** The site is dark only, and so is Fotodit since it took the site's look: the light theme and "Windows
+ayarına uy" (follow Windows) are gone, and `QStyleHints.setColorScheme` keeps the window title bars dark. "Görünüm"
+(appearance) holds "Saydamlığı azalt" (reduce transparency), which draws solid surfaces instead of frosted ones, as
+the site does where a browser has no backdrop filter; it is Fotodit's own setting rather than Windows' "Transparency
+effects", which many Windows 10 machines have turned off for the taskbar's sake. Focus rings (a pixel of the accent at
+62%, 2 px outside the control, as the site's) appear after keyboard navigation, not after a click. The colors are
+named tokens (TEXT, MUTED, ACCENT …). Qt's palette is built from them completely, including the disabled group and the
+roles Fusion uses for frames and scroll bars, so that nothing falls back to the system's colors; the style sheet and
+the indicators Fotodit draws itself (check boxes, radio buttons, the chevrons of lists, trees, pop-up buttons and
+number boxes) use them too.
 
-**Light and dark.** "Görünüm": "Windows ayarına uy" (follow the Windows setting; the default), "Açık" (light) or
-"Koyu" (dark); the choices are remembered. The colors are named tokens (ACCENT, TEXT, MUTED, SEPARATOR …) with a
-value for each variant. Qt's palette is built from them completely, including the disabled group and the roles
-Fusion uses for frames and scroll bars, so that nothing falls back to the system's colors; the style sheet and the
-indicators Fotodit draws itself (check boxes, radio buttons, the chevrons of lists, trees, pop-up buttons and
-number boxes) use them too. Code that paints reads the tokens when it paints; widgets that keep a color (the cached
-cell colors of "Seçilenler", the HTML of the info panel, the glass images, the drawn tiles) listen to a change
-signal, so switching needs no restart.
-`QStyleHints.setColorScheme` tells Windows the scheme, which also turns the window title bars dark (Qt 6.8+); with
-"Windows ayarına uy" a change of the Windows setting is followed while the app runs.
-
-Contrast on the window and panel backgrounds (WCAG ratio, the lower of the two; light / dark): text 16.2 / 13.5,
-secondary text 5.8 / 6.4, warnings 5.6 / 7.4, errors 5.8 / 6.0, success and edits (grey) 10.2 / 9.9; the label of
-the primary button on its ink 18.1 / 16.5. On a selected row: secondary text 4.8 / 4.9, warnings 4.6 / 5.7, errors
-4.8 / 4.7.
+Contrast (WCAG ratio) on the stage / the cards / a selected row: text 18.5 / 17.8 / 16.1, secondary text 8.3 / 8.0 /
+7.2, hints 5.5 / 5.3 / 4.8, warnings 13.0 / 12.5 / 11.3, errors 7.8 / 7.5 / 6.8, success 13.1 / 12.7 / 11.4, edits
+10.2 / 9.8 / 8.9; the dark tick on the accent 16.1.
 
 **Use.** In "Gözat" a folder opens on a double-click; a single click only highlights it, so a click meant for a photo
 never takes you into another folder (the tree on the left still opens a folder with one click on its name, as in
@@ -1148,7 +1147,7 @@ Example: converting 500 phone photos to JPG and cleaning them takes about 5 minu
   horizontal flip (450 random edits compared pixel by pixel with flipping the result, every photo path, RAW, the
   block grid, video with and without a quarter turn) and, in the UI, the flip in the preview, in crop mode, in
   "Seçilenler" and "Gözat", the folder tile's circle and the theme colors. The redesign added the double-click into
-  folders, the path bar (its steps, typing a path, a path that does not exist), the glass looks, tabular digits only
+  folders, the path bar (its steps, typing a path, a path that does not exist), the Görünüm menu, tabular digits only
   where numbers change, and the operations panel fitting its narrowest width.
   A code review of 1.3, file by file (the core, the metadata readers, the video code, the main window and the
   preview) and then in the narrowest window in both languages, found 68 defects; each is fixed with a test that
@@ -1205,8 +1204,8 @@ Example: converting 500 phone photos to JPG and cleaning them takes about 5 minu
   using this computer's time zone, so a video shot in another time zone may show a shifted time. GIF, BMP and
   videos other than MP4/MOV/3GP keep the date only as the file date, which copying or zipping may lose.
 * **Duplicates** are only identical pictures: resized or recompressed copies and similar shots are not found.
-* **Glass** is drawn on the CPU; a large capsule over a changing backdrop (a playing video) costs a few
-  milliseconds per frame. "Saydamlığı azalt" turns it into a solid surface.
+* **Frosted surfaces** are drawn on the CPU; a large pill over a changing backdrop (a playing video) costs a few
+  milliseconds per frame. "Saydamlığı azalt" turns them into solid ones.
 * **Folder selection is a snapshot:** photos added to a folder after it was selected are not included until the
   folder is selected again. Photos that are "online-only" in OneDrive are downloaded to the computer when they are
   selected, while their info is being read (this is needed for processing anyway).
@@ -1281,34 +1280,17 @@ so this path is untested.
   QVideoFrame: <https://doc.qt.io/qt-6/qvideoframe.html>
 * ITU-R BT.2100 (HLG/PQ), BT.2408 (HDR reference white 203 cd/m²), BT.2087 (BT.2020 → BT.709)
 
-**Design (Liquid Glass)**
-* Apple Human Interface Guidelines: <https://developer.apple.com/design/human-interface-guidelines/materials>,
-  <https://developer.apple.com/design/human-interface-guidelines/toolbars>,
-  <https://developer.apple.com/design/human-interface-guidelines/sidebars>,
-  <https://developer.apple.com/design/human-interface-guidelines/sheets>,
-  <https://developer.apple.com/design/human-interface-guidelines/color>,
-  <https://developer.apple.com/design/human-interface-guidelines/accessibility>
-* Liquid Glass overview and adoption: <https://developer.apple.com/documentation/technologyoverviews/liquid-glass>,
-  <https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass>
-* WWDC25 "Meet Liquid Glass" <https://developer.apple.com/videos/play/wwdc2025/219/>, "Get to know the new design
-  system" <https://developer.apple.com/videos/play/wwdc2025/356/>, "Build an AppKit app with the new design"
-  <https://developer.apple.com/videos/play/wwdc2025/310/>; the 2026 revision:
-  <https://developer.apple.com/videos/play/wwdc2026/101/>, <https://developer.apple.com/videos/play/wwdc2026/102/>,
-  <https://developer.apple.com/videos/play/wwdc2026/269/>
-* iOS 27's glass measured on a device and in the simulator:
-  <https://github.com/shayann07/liquidglass/blob/main/docs/research/ios27-measurements-raw.md>,
-  <https://github.com/shayann07/liquidglass/blob/main/docs/research/measured-model.md>; Apple's iOS 27 design kit
-  as transcribed tokens: <https://github.com/seunghan91/ios27-design-system>; what changed in iOS 27:
-  <https://www.macrumors.com/2026/06/10/how-liquid-glass-is-changing-in-ios-27/>,
-  <https://www.ryanthomson.net/articles/liquid-glass-ios-27-first-impressions>
-* The looks: <https://www.macrumors.com/2025/10/20/ios-26-1-liquid-glass-toggle/>,
-  <https://9to5mac.com/2026/06/12/ios-27-fixes-liquid-glass-and-not-just-with-a-slider/>
+**Design (Artapa's look)**
+* Artapa's website, whose look the interface takes: <https://artapa.com>
+* CSS's backdrop-filter, box-shadow and gradients, as the site uses them:
+  <https://developer.mozilla.org/docs/Web/CSS/backdrop-filter>,
+  <https://developer.mozilla.org/docs/Web/CSS/box-shadow>,
+  <https://developer.mozilla.org/docs/Web/CSS/gradient/radial-gradient>
 * Springs: <https://developer.apple.com/videos/play/wwdc2023/10158/>,
   <https://developer.apple.com/documentation/swiftui/spring/init(duration:bounce:)>
-* The optics (convex squircle rim, Snell's law, index 1.5): <https://kube.io/blog/liquid-glass-css-svg/>,
-  <https://github.com/dashersw/liquid-glass-js>
-* The typeface: Inter <https://rsms.me/inter>, <https://github.com/rsms/inter/releases/tag/v4.1>; Qt's hinting
-  preference <https://doc.qt.io/qt-6/qfont.html#HintingPreference-enum>; the variable-font bug
+* The typeface: Onest <https://github.com/googlefonts/onest>; the license that keeps General Sans out of a
+  public repository: <https://www.fontshare.com/licenses/itf-ffl>; Qt's hinting preference
+  <https://doc.qt.io/qt-6/qfont.html#HintingPreference-enum>; the variable-font bug
   <https://qt-project.atlassian.net/browse/QTBUG-149199>
 * The icons: Hugeicons <https://hugeicons.com>, the free set's package
   <https://www.npmjs.com/package/@hugeicons/core-free-icons/v/4.3.5>; Animate UI's icons and their license

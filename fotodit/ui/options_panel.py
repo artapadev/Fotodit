@@ -1,9 +1,9 @@
 """Right-hand panel (the inspector): the operations, rename/grouping options, the output location
 and the start button.
 
-The operations are rows with a switch, grouped on rounded sections as in Apple's settings; the
+The operations are rows with a switch, grouped on rounded sections (Artapa's glyph cards); the
 options of an operation sit under its switch and are enabled with it. The start button is the
-view's one prominent (accent-tinted) glass button.
+view's one primary button: Artapa's silver button, its icon in the silver circle at its end.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ import os
 import threading
 from datetime import datetime
 
-from PySide6.QtCore import QObject, QSettings, QStandardPaths, Qt, Signal
+from PySide6.QtCore import QObject, QRectF, QSettings, QStandardPaths, Qt, Signal
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -56,7 +57,7 @@ from ..core.video.process import VIDEO_COMPATIBLE, VIDEO_KEEP
 from ..i18n import month_name, percent, t
 from ..winutil import safe_filename_part
 from . import count_text, glass, theme
-from .controls import GlassButton, Switch
+from .controls import SILVER, PillButton, Switch
 from .widgets import ElidedComboBox, NumberBox
 
 SIZES = [
@@ -172,7 +173,8 @@ def _hint(text: str) -> QLabel:
 
 
 class _Group(QFrame):
-    """A rounded section of rows (Apple's grouped settings); rows are separated by hairlines."""
+    """A rounded section of rows, as Artapa's glyph cards: a faint white over the aurora, a ring and a
+    line of light at the top; rows are separated by hairlines."""
 
     def __init__(self):
         super().__init__()
@@ -181,6 +183,10 @@ class _Group(QFrame):
         self._lay.setContentsMargins(14, 6, 14, 10)
         self._lay.setSpacing(6)
         self._rows = 0
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        glass.paint_card(p, QRectF(self.rect()), theme.RADIUS_CARD, QColor(theme.CARD_BG))
 
     def add_row(self, *widgets: QWidget, indent: int = 0) -> None:
         if self._rows:
@@ -455,9 +461,8 @@ class OptionsPanel(QWidget):
         out.add_row(self.to_folder, self.folder_box)
         out.add_row(self.in_place, self.in_place_box)
 
-        self.start_btn = GlassButton("", "play.fill", kind=glass.PROMINENT)
+        self.start_btn = PillButton("", "play.fill", kind=SILVER)
         self.start_btn.setObjectName("Primary")
-        self.start_btn.setMinimumHeight(46)
         self.start_btn.clicked.connect(self.startRequested)
         self.summary = QLabel()
         self.summary.setObjectName("Muted")

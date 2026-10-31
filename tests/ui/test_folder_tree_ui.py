@@ -36,16 +36,15 @@ def app():
 
 @pytest.fixture
 def app_look(app):
-    """The app's own style, style sheet and Inter: the room a name gets depends on all three."""
+    """The app's own style, style sheet and Onest: the room a name gets depends on all three."""
     style, fonts = app.style().name(), {name: QApplication.font(name) for name in FONT_CLASSES}
     font = app.font()
-    theme.apply(app, theme.LIGHT)
+    theme.apply(app)
     yield
     app.setStyleSheet("")  # the other tests run without the app's theme
     app.setStyle(QStyleFactory.create(style))
     app.setPalette(app.style().standardPalette())
     QGuiApplication.styleHints().unsetColorScheme()
-    theme._use(False)
     theme._style = None
     app.setFont(font)
     for name, class_font in fonts.items():
@@ -98,11 +97,12 @@ def test_a_folder_ten_levels_deep_keeps_its_name_in_the_narrowest_sidebar(app, a
 
         shown, room = _shown_name(tree, index)
         assert shown == name or (shown.endswith("…") and shown.startswith(name[:8])), shown
-        # The tree draws it so: the name's ink reaches at least as far as its first eight characters.
+        # The tree draws it so: the name's ink (light, on the dark card) reaches at least as far as its
+        # first eight characters.
         image = tree.viewport().grab().toImage()
         ink = [x for x in range(room.left(), min(room.right() + 1, image.width()))
                for y in range(room.top() + 4, room.bottom() - 3)
-               if image.pixelColor(x, y).alpha() > 160 and image.pixelColor(x, y).lightness() < 110]
+               if image.pixelColor(x, y).alpha() > 160 and image.pixelColor(x, y).lightness() > 120]
         assert ink and max(ink) - room.left() >= QFontMetrics(tree.font()).horizontalAdvance(name[:8]) - 2
         assert FolderTree.MIN_STEP <= tree.indentation() < FolderTree.STEP  # by taking smaller steps
 

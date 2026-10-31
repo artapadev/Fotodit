@@ -1,30 +1,30 @@
-"""App theme: Apple's Liquid Glass design language in a light and a dark variant.
+"""App theme: Artapa's look (artapa.com), dark only.
 
-The colors are named tokens (ACCENT, TEXT, MUTED …) with a value for each variant. The app is
-black, white and grey: the "accent" is the ink (near black in light, near white in dark), and
-only warnings and errors keep a color. Text passes WCAG AA (4.5:1) on the
-window, on panels and on the grey selection. Code reads them from this module when it paints or
-builds a text (`theme.TEXT`), so after a change they take effect on the next repaint; widgets
-that keep a color (a style sheet of their own, a cached QColor, an icon) listen to
-`changes().changed`. `apply()` sets Qt's palette and style sheet and tells Windows the color
-scheme, so window title bars turn dark too (open windows get their title bar redrawn, see
-`winutil.redraw_frame`). "Windows ayarına uy" follows the Windows setting (Settings →
-Personalization → Colors), also while the app is running.
+The colors are named tokens (TEXT, MUTED, ACCENT …) with Artapa's values (its `tokens.css`): a
+near-black page, two surfaces, three tones of text, white at low opacities for wells, lines and
+light, and a few tones of its own (peach, periwinkle, lilac, the aurora and the premium gradient),
+used where Artapa uses them. Warnings, errors and success keep its amber, red and green, always
+with a symbol too. Text passes WCAG AA (4.5:1) on the page, on the cards and on selected rows. Code
+reads the tokens from this module when it paints or builds a text (`theme.TEXT`); widgets that keep
+a color (a style sheet of their own, a cached QColor, an icon) listen to `changes().changed`.
+`apply()` sets Qt's palette and style sheet and tells Windows the color scheme, so the window title
+bars are dark too.
 
-The structure: the window is the content layer (WINDOW); sidebars, toolbars and the
-inspector float above it as glass (see `glass`). Controls are capsules and rounded
-rectangles whose corners are concentric with the surface they sit on. The large preview
-has its own dark look in both variants (photos are judged on a dark background).
+The structure follows Artapa's admin panel: the window is the calm stage (see `glass.paint_stage`),
+the sidebar and the inspector are cards on it, and the toolbars float above the content as the
+site's header pills (see `glass`). Controls are pills and rounded rectangles whose corners are
+concentric with the card they sit on.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
     QFontDatabase,
     QGuiApplication,
+    QLinearGradient,
     QPainter,
     QPainterPath,
     QPalette,
@@ -32,169 +32,117 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle
 
-from ..i18n import t
+# Corner radii (logical px), Artapa's. Inner corners are concentric: inner radius = outer radius − padding.
+RADIUS_STAGE = 24  # the sidebar and inspector cards, sheets
+RADIUS_CARD = 16  # groups inside a card (24 − the card's padding of 8)
+RADIUS_FLOAT = 20  # floating panels (the preview's info panel)
+RADIUS_MENU = 12  # menus
+RADIUS_WELL = 10  # text fields, pop-up buttons, list rows, tooltips
+RADIUS_MEDIA = 9  # thumbnails (Artapa's card media)
+BASE_SIZE = 9.75  # pt: the body text (Onest; 13 px at 100 %, as Artapa's app text)
 
-SYSTEM, LIGHT, DARK = "system", "light", "dark"
-MODES = (SYSTEM, LIGHT, DARK)
-
-
-def mode_label(mode: str) -> str:
-    """A variant's name in the Görünüm menu."""
-    return t(f"theme.mode.{mode}")
-
-# Corner radii (logical px). Inner corners are concentric: inner radius = outer radius − padding.
-RADIUS_PANEL = 18  # glass sidebar and inspector
-RADIUS_CARD = 12  # groups inside a panel (panel radius 18 − padding 6)
-RADIUS_CONTROL = 8  # text fields, pop-up buttons, list rows
-BASE_SIZE = 9.5  # pt: the body text (Inter; its letters are larger than Segoe UI's at the same size)
-
-_LIGHT = {
-    "WINDOW": "#F2F2F2",  # the content layer: window and content background
-    "BG": "#F2F2F2",  # dialogs
-    "PANEL": "#FFFFFF",  # opaque surfaces: menus, list popups, cards
-    "ACCENT": "#161616",  # the ink: primary button, switches, checks, rings (no color: black, white, grey)
-    "ON_ACCENT": "#FFFFFF",  # text and marks drawn on the ink
-    "ACCENT_HOVER": "#2B2B2B",
-    "ACCENT_PRESSED": "#3D3D3D",
-    "ACCENT_SOFT": "#DDDDDD",  # selected rows and tiles: a grey fill
-    "ACCENT_TEXT": "#161616",  # links (underlined) and emphasized text
-    "SELECTION": "#C9C9C9",  # selected text in fields
-    "BORDER": "#CFCFCF",
-    "SEPARATOR": "#E0E0E0",
-    "TEXT": "#161616",
-    "MUTED": "#5E5E5E",
-    "WARN": "#9E4700",  # warnings and errors keep a color
-    "DANGER": "#C00012",
-    "SUCCESS": "#3A3A3A",
-    "EDIT": "#3A3A3A",  # edited photos and videos
-    "FILL": "#14000000",  # control fill on glass (8% black)
-    "HOVER": "#0F000000",
-    "PRESSED": "#1F000000",
-    "DISABLED": "#A6A6A6",
-    "DISABLED_BG": "#0A000000",
-    "PRIMARY_DISABLED": "#E0E0E0",
-    "PRIMARY_DISABLED_TEXT": "#696969",
-    "INPUT": "#FFFFFF",
-    "INPUT_DISABLED": "#EEEEEE",
-    "INPUT_DISABLED_TEXT": "#9E9E9E",
-    "ITEM_HOVER": "#0D000000",
-    "GRID": "#E6E6E6",
-    "HEADER": "#F2F2F2",
-    "TRACK": "#D6D6D6",  # slider and progress tracks
-    "TOOLTIP": "#2A2A2A",
-    "TOOLTIP_TEXT": "#F2F2F2",
-    "PLACEHOLDER": "#696969",
-    "ALT_BASE": "#F8F8F8",
-    "CHECK_BORDER": "#8A8A8A",
-    "CHECK_BORDER_OFF": "#C7C7C7",
-    "CHECK_OFF": "#F4F4F4",
-    "CHECK_ON_OFF": "#BDBDBD",
-    "SWITCH_OFF": "#D1D1D1",
-    "TILE_FOCUS": "#C7C7C7",
-    "TILE_EMPTY": "#E6E6E6",  # a thumbnail that is not ready yet
-    "BADGE_RING": "#FFFFFF",
-    "BADGE_RING_HOVER": "#FFFFFF",
-    "BADGE_FILL": "#33000000",
-    "BADGE_FILL_HOVER": "#59000000",
-    "FOLDER": "#BDBDBD",  # folder icons: grey
-    "FOLDER_TAB": "#A3A3A3",
+_TOKENS = {
+    # The page and its surfaces
+    "WINDOW": "#070707",  # the calm stage behind everything (Artapa's admin panel)
+    "PAGE": "#060606",  # Artapa's page: the large preview's stage, the knob of an open switch
+    "PANEL": "#0D0D0D",  # surface-1: the cards, menus, list pop-ups
+    "SURFACE_2": "#141414",  # surface-2: a thumbnail that is not ready yet
+    # Text
+    "TEXT": "#F5F5F5",  # text-primary
+    "MUTED": "#A6A6A6",  # text-secondary: what is read second
+    "FAINT": "#868686",  # text-muted: hints, column titles, placeholders
+    "DISABLED": "#5E5E5E",
+    # What is on or chosen: Artapa's accent-1 (checks, rings, slider fills), marks on it in on-premium
+    "ACCENT": "#E8EAEF",
+    "ON_ACCENT": "#0D0D0D",
+    "ACCENT_SOFT": "#1AFFFFFF",  # a chosen row or tab (white at 10%, Artapa's active link)
+    "ACCENT_TEXT": "#F5F5F5",  # links (underlined) and emphasized text
+    "SELECTION": "#4A4C52",  # selected text in fields
+    # White at low opacities: wells (fields), lines and light
+    "WELL": "#0DFFFFFF",  # 5 %
+    "WELL_HOVER": "#13FFFFFF",  # 7.5 %
+    "HOVER": "#0FFFFFFF",  # 6 %: a row or button under the pointer (Artapa's nav links)
+    "PRESSED": "#1AFFFFFF",
+    "ITEM_HOVER": "#0AFFFFFF",  # 4 %: a tile under the pointer (Artapa's cards)
+    "CARD_BG": "#07FFFFFF",  # 2.7 %: groups inside a card
+    "BORDER": "#14FFFFFF",  # border-soft, 8 %
+    "BORDER_HOVER": "#29FFFFFF",  # 16 %
+    "SEPARATOR": "#14FFFFFF",
+    "GRID": "#0FFFFFFF",  # the lines between table rows
+    "RIM": "#0FFFFFFF",  # the line of light inside a top edge
+    "TRACK": "#1FFFFFFF",  # slider and progress tracks (12 %)
+    # States: Artapa's positive, opt-mid and field-error; its danger for what ends something
+    "SUCCESS": "#86E3B5",
+    "WARN": "#F4C983",
+    "DANGER": "#FF7676",
+    "STOP": "#FF8585",
+    "STOP_TINT": "#0FFF5A5A",
+    "STOP_RING": "#47FF5A5A",
+    # Artapa's tones
+    "PEACH": "#FFBEA2",
+    "PERIWINKLE": "#A2B7F5",
+    "LILAC": "#D4D9E4",
+    "EDIT": "#A2B7F5",  # edited photos and videos (periwinkle, Artapa's "new")
+    "AURORA_WARM": "#FEEAE1",
+    "AURORA_COOL": "#C0CEF2",
+    "PREMIUM_START": "#BCC0CA",  # the premium gradient: PREMIUM_START, AURORA_WARM, AURORA_COOL
+    "SILVER_TOP": "#FFFFFF",  # the silver circle: SILVER_TOP, SILVER_MIDDLE at 55 %, SILVER_FOOT
+    "SILVER_MIDDLE": "#E6E7EE",
+    "SILVER_FOOT": "#C9CCD6",
+    # Controls
+    "INPUT_DISABLED": "#06FFFFFF",
+    "TOOLTIP": "#1E1E1E",  # Artapa's toast, rgb(30 30 30 / .95), made opaque
+    "PLACEHOLDER": "#868686",
+    "CHECK_BORDER": "#3DFFFFFF",  # an empty check box's ring (24 %), brighter under the pointer
+    "CHECK_BORDER_HOVER": "#66FFFFFF",
+    "CHECK_ON_OFF": "#4D4D4D",  # a check box that is on but cannot be changed
+    "SWITCH_OFF": "#1FFFFFFF",
+    "FOLDER": "#4A4A4E",  # folder icons: grey
+    "FOLDER_TAB": "#38383C",
     # Fusion's bevels and scroll bars
-    "LIGHT": "#FFFFFF",
-    "MIDLIGHT": "#F2F2F2",
-    "MID": "#C7C7C7",
-    "DARK": "#A3A3A3",
-    "SHADOW": "#7D7D7D",
+    "LIGHT_ROLE": "#2A2A2A",
+    "MIDLIGHT": "#1E1E1E",
+    "MID": "#29FFFFFF",
+    "DARK_ROLE": "#060606",
+    "SHADOW": "#000000",
 }
 
-_DARK = {
-    "WINDOW": "#141414",
-    "BG": "#1A1A1A",
-    "PANEL": "#262626",
-    "ACCENT": "#F2F2F2",
-    "ON_ACCENT": "#141414",
-    "ACCENT_HOVER": "#FFFFFF",
-    "ACCENT_PRESSED": "#D4D4D4",
-    "ACCENT_SOFT": "#383838",
-    "ACCENT_TEXT": "#F2F2F2",
-    "SELECTION": "#4D4D4D",
-    "BORDER": "#4A4A4A",
-    "SEPARATOR": "#353535",
-    "TEXT": "#F2F2F2",
-    "MUTED": "#A8A8A8",
-    "WARN": "#FF9F0A",
-    "DANGER": "#FF7B73",  # 4.6:1 even on a selected row
-    "SUCCESS": "#D1D1D1",
-    "EDIT": "#D1D1D1",
-    "FILL": "#1FFFFFFF",  # 12% white
-    "HOVER": "#14FFFFFF",
-    "PRESSED": "#26FFFFFF",
-    "DISABLED": "#666666",
-    "DISABLED_BG": "#0DFFFFFF",
-    "PRIMARY_DISABLED": "#3A3A3A",
-    "PRIMARY_DISABLED_TEXT": "#A8A8A8",
-    "INPUT": "#1C1C1C",
-    "INPUT_DISABLED": "#222222",
-    "INPUT_DISABLED_TEXT": "#666666",
-    "ITEM_HOVER": "#12FFFFFF",
-    "GRID": "#2C2C2C",
-    "HEADER": "#141414",
-    "TRACK": "#3D3D3D",
-    "TOOLTIP": "#3A3A3A",
-    "TOOLTIP_TEXT": "#F2F2F2",
-    "PLACEHOLDER": "#9A9A9A",
-    "ALT_BASE": "#1C1C1C",
-    "CHECK_BORDER": "#8E8E8E",
-    "CHECK_BORDER_OFF": "#4A4A4A",
-    "CHECK_OFF": "#2C2C2C",
-    "CHECK_ON_OFF": "#5C5C5C",
-    "SWITCH_OFF": "#5C5C5C",
-    "TILE_FOCUS": "#4A4A4A",
-    "TILE_EMPTY": "#2C2C2C",
-    "BADGE_RING": "#FFFFFF",
-    "BADGE_RING_HOVER": "#FFFFFF",
-    "BADGE_FILL": "#40000000",
-    "BADGE_FILL_HOVER": "#66000000",
-    "FOLDER": "#8C8C8C",
-    "FOLDER_TAB": "#6E6E6E",
-    "LIGHT": "#3A3A3A",
-    "MIDLIGHT": "#333333",
-    "MID": "#2A2A2A",
-    "DARK": "#141414",
-    "SHADOW": "#0A0A0A",
-}
+# The tokens as module attributes (filled in from _TOKENS just below).
+WINDOW = PAGE = PANEL = SURFACE_2 = TEXT = MUTED = FAINT = DISABLED = ACCENT = ON_ACCENT = ACCENT_SOFT = ""
+ACCENT_TEXT = SELECTION = WELL = WELL_HOVER = HOVER = PRESSED = ITEM_HOVER = CARD_BG = BORDER = ""
+BORDER_HOVER = SEPARATOR = GRID = RIM = TRACK = SUCCESS = WARN = DANGER = STOP = STOP_TINT = STOP_RING = ""
+PEACH = PERIWINKLE = LILAC = EDIT = AURORA_WARM = AURORA_COOL = PREMIUM_START = SILVER_TOP = SILVER_MIDDLE = ""
+SILVER_FOOT = INPUT_DISABLED = TOOLTIP = PLACEHOLDER = CHECK_BORDER = CHECK_BORDER_HOVER = CHECK_ON_OFF = ""
+SWITCH_OFF = FOLDER = FOLDER_TAB = LIGHT_ROLE = MIDLIGHT = MID = DARK_ROLE = SHADOW = ""
+globals().update(_TOKENS)
 
-# The tokens as module attributes (filled in by `_use`, light until `apply` is called).
-WINDOW = BG = PANEL = ACCENT = ON_ACCENT = ACCENT_HOVER = ACCENT_PRESSED = ACCENT_SOFT = ACCENT_TEXT = ""
-SELECTION = BORDER = SEPARATOR = ""
-TEXT = MUTED = WARN = DANGER = SUCCESS = EDIT = FILL = HOVER = PRESSED = DISABLED = DISABLED_BG = ""
-PRIMARY_DISABLED = PRIMARY_DISABLED_TEXT = INPUT = INPUT_DISABLED = INPUT_DISABLED_TEXT = ITEM_HOVER = GRID = ""
-HEADER = TRACK = TOOLTIP = TOOLTIP_TEXT = PLACEHOLDER = ALT_BASE = CHECK_BORDER = CHECK_BORDER_OFF = CHECK_OFF = ""
-CHECK_ON_OFF = SWITCH_OFF = TILE_FOCUS = TILE_EMPTY = BADGE_RING = BADGE_RING_HOVER = BADGE_FILL = ""
-BADGE_FILL_HOVER = FOLDER = FOLDER_TAB = LIGHT_ROLE = MIDLIGHT = MID = DARK_ROLE = SHADOW = ""
-
-_mode = SYSTEM  # what the user chose
-_dark = False  # what is shown
-_following = False  # connected to the Windows setting
 _style: QProxyStyle | None = None  # the app's style, once set (app.style() does not return the Python object)
 _family = "Segoe UI"
 _hinting = QFont.HintingPreference.PreferDefaultHinting
 
 
-def _use(dark: bool) -> None:
-    global _dark
-    _dark = dark
-    colors = dict(_DARK if dark else _LIGHT)
-    # LIGHT/DARK would clash with the mode names above.
-    colors["LIGHT_ROLE"], colors["DARK_ROLE"] = colors.pop("LIGHT"), colors.pop("DARK")
-    globals().update(colors)
-
-
-_use(False)
-
-
 def color(token: str) -> QColor:
     """A token as a QColor (tokens may carry alpha: #AARRGGBB)."""
     return QColor(token)
+
+
+def premium_gradient(start: QPointF, end: QPointF, alpha: float = 1.0) -> QLinearGradient:
+    """Artapa's premium gradient (silver, warm white, cool blue) from `start` to `end`."""
+    gradient = QLinearGradient(start, end)
+    for at, token in ((0.0, PREMIUM_START), (0.42, AURORA_WARM), (1.0, AURORA_COOL)):
+        c = QColor(token)
+        c.setAlphaF(alpha)
+        gradient.setColorAt(at, c)
+    return gradient
+
+
+def silver_gradient(top: float, bottom: float) -> QLinearGradient:
+    """The silver of Artapa's icon circle, from `top` to `bottom` (y)."""
+    gradient = QLinearGradient(QPointF(0, top), QPointF(0, bottom))
+    gradient.setColorAt(0.0, QColor(SILVER_TOP))
+    gradient.setColorAt(0.55, QColor(SILVER_MIDDLE))
+    gradient.setColorAt(1.0, QColor(SILVER_FOOT))
+    return gradient
 
 
 class _Changes(QObject):
@@ -205,23 +153,15 @@ _changes: _Changes | None = None
 
 
 def changes() -> _Changes:
-    """Emits `changed` after the theme changed (for widgets that keep colors)."""
+    """Emits `changed` after the look changed (for widgets that keep colors or drawn images)."""
     global _changes
     if _changes is None:
         _changes = _Changes()
     return _changes
 
 
-def mode() -> str:
-    return _mode
-
-
-def is_dark() -> bool:
-    return _dark
-
-
 def family() -> str:
-    """The UI font: the bundled Inter (see `fonts`), else Segoe UI Variable or Segoe UI."""
+    """The UI font: the bundled Onest (see `fonts`), else Segoe UI Variable or Segoe UI."""
     return _family
 
 
@@ -236,8 +176,7 @@ def font(size: float = 10.0, weight: QFont.Weight = QFont.Weight.Normal) -> QFon
 
 def tabular(f: QFont) -> QFont:
     """`f` with equal-width digits, for numbers that change in place or stand in a column (a
-    timer, a counter, the dates of a list), so they do not shift. Not for all text: Inter's
-    tabular forms widen hyphens too, which spreads file names apart ("C - - Users")."""
+    timer, a counter, the dates of a list), so they do not shift."""
     f = QFont(f)
     f.setFeature(QFont.Tag("tnum"), 1)
     return f
@@ -253,106 +192,100 @@ def _rgba(token: str) -> str:
 
 
 def _qss() -> str:
-    c = {name: _rgba(value) for name, value in globals().items()
-         if name.isupper() and isinstance(value, str) and value.startswith("#")}
+    c = {name: _rgba(value) for name, value in _TOKENS.items()}
+    premium = (f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PREMIUM_START}, stop:0.42 {AURORA_WARM}, "
+               f"stop:1 {AURORA_COOL})")
     return f"""
 QMainWindow, QDialog {{ background: {c['WINDOW']}; }}
 QWidget#Glass, QWidget#Glass QWidget#GlassBody {{ background: transparent; }}
 QLabel {{ color: {c['TEXT']}; }}
-QLabel#CardTitle {{ font-size: 10pt; font-weight: 700; color: {c['TEXT']}; }}
-QLabel#SectionTitle {{ font-size: 8.5pt; font-weight: 700; color: {c['MUTED']}; }}
+QLabel#CardTitle {{ font-size: 10pt; font-weight: 600; color: {c['TEXT']}; }}
+QLabel#SectionTitle {{ font-size: 8.5pt; font-weight: 500; color: {c['FAINT']}; }}
 QLabel#Muted {{ color: {c['MUTED']}; }}
-QLabel#Hint {{ color: {c['MUTED']}; font-size: 8.5pt; }}
+QLabel#Hint {{ color: {c['FAINT']}; font-size: 8.75pt; }}
 QLabel#Warn {{ color: {c['WARN']}; }}
-QLabel#Example {{ color: {c['MUTED']}; font-size: 8.5pt; }}
-QLabel#BarText {{ color: {c['TEXT']}; }}
-QLabel#EmptyTitle {{ color: {c['TEXT']}; font-size: 12.5pt; font-weight: 700; }}
+QLabel#Example {{ color: {c['FAINT']}; font-size: 8.75pt; }}
+QLabel#BarText {{ color: {c['MUTED']}; }}
+QLabel#EmptyTitle {{ color: {c['TEXT']}; font-size: 13pt; font-weight: 600; }}
 QLabel#Empty {{ color: {c['MUTED']}; }}
 QLineEdit#GlassField {{ background: transparent; border: none; padding: 0 2px; }}
-QFrame#Group {{ background: {c['FILL']}; border: none; border-radius: {RADIUS_CARD}px; }}
 QFrame#GroupLine {{ background: {c['SEPARATOR']}; border: none; }}
-QSplitter#Sidebar::handle {{ background: transparent; }}
+QSplitter::handle {{ background: transparent; }}
 QPushButton {{
-    background: {c['FILL']}; color: {c['TEXT']}; border: none; border-radius: {RADIUS_CONTROL}px;
-    padding: 5px 14px; min-height: 20px; font-weight: 700;
+    background: rgba(255,255,255,11); color: {c['TEXT']}; border: 1px solid {c['BORDER']};
+    border-radius: 15px; padding: 5px 15px; min-height: 18px; font-weight: 500;
 }}
-QPushButton:hover {{ background: {c['PRESSED']}; }}
+QPushButton:hover {{ background: rgba(255,255,255,18); border-color: {c['BORDER_HOVER']}; }}
 QPushButton:pressed {{ background: {c['PRESSED']}; }}
-QPushButton:disabled {{ color: {c['DISABLED']}; background: {c['DISABLED_BG']}; }}
+QPushButton:disabled {{ color: {c['DISABLED']}; background: {c['INPUT_DISABLED']}; border-color: {c['INPUT_DISABLED']}; }}
 QPushButton:checked {{ background: {c['ACCENT_SOFT']}; color: {c['TEXT']}; }}
-QPushButton#Primary {{
-    background: {c['ACCENT']}; color: {c['ON_ACCENT']}; font-weight: 700; font-size: 10pt;
-    padding: 10px 18px; border-radius: 19px;
+QPushButton#Primary {{ font-size: 10pt; font-weight: 500; }}
+QPushButton#Link {{
+    background: transparent; border: none; color: {c['ACCENT_TEXT']}; padding: 2px 4px; text-decoration: underline;
 }}
-QPushButton#Primary:hover {{ background: {c['ACCENT_HOVER']}; }}
-QPushButton#Primary:pressed {{ background: {c['ACCENT_PRESSED']}; }}
-QPushButton#Primary:disabled {{ background: {c['PRIMARY_DISABLED']}; color: {c['PRIMARY_DISABLED_TEXT']}; }}
-QPushButton#Accent {{ color: {c['ACCENT_TEXT']}; font-weight: 700; }}
-QPushButton#Accent:disabled {{ color: {c['DISABLED']}; }}
-QPushButton#Link {{ background: transparent; color: {c['ACCENT_TEXT']}; padding: 2px 4px; text-decoration: underline; }}
 QToolButton {{ color: {c['TEXT']}; background: transparent; border: none; border-radius: 15px; padding: 5px; }}
 QToolButton:hover {{ background: {c['HOVER']}; }}
 QToolButton:pressed {{ background: {c['PRESSED']}; }}
 QToolButton:disabled {{ background: transparent; }}
 QCheckBox, QRadioButton {{ spacing: 8px; color: {c['TEXT']}; }}
 QCheckBox:disabled, QRadioButton:disabled {{ color: {c['DISABLED']}; }}
-QCheckBox#Section {{ font-weight: 700; font-size: 10pt; }}
+QCheckBox#Section {{ font-weight: 600; font-size: 10pt; }}
 QLineEdit, QComboBox, QSpinBox {{
-    padding: 4px 9px; border: 1px solid {c['BORDER']}; border-radius: {RADIUS_CONTROL}px;
-    background: {c['INPUT']}; color: {c['TEXT']}; min-height: 20px;
+    padding: 4px 10px; border: 1px solid transparent; border-radius: {RADIUS_WELL}px;
+    background: {c['WELL']}; color: {c['TEXT']}; min-height: 20px;
     selection-background-color: {c['SELECTION']}; selection-color: {c['TEXT']};
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid {c['ACCENT']}; }}
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{ background: {c['WELL_HOVER']}; }}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ background: {c['WELL_HOVER']}; border-color: {c['BORDER_HOVER']}; }}
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{
-    background: {c['INPUT_DISABLED']}; color: {c['INPUT_DISABLED_TEXT']}; border-color: {c['SEPARATOR']};
+    background: {c['INPUT_DISABLED']}; color: {c['DISABLED']}; border-color: transparent;
 }}
-QLineEdit#PathField {{ border-radius: 15px; padding: 4px 12px; }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ border: none; width: 16px; }}
 QComboBox QAbstractItemView {{
-    background: {c['PANEL']}; color: {c['TEXT']}; border: 1px solid {c['SEPARATOR']}; padding: 4px;
+    background: {c['PANEL']}; color: {c['TEXT']}; border: 1px solid {c['BORDER_HOVER']}; padding: 4px;
     selection-background-color: {c['ACCENT_SOFT']}; selection-color: {c['TEXT']}; outline: 0;
 }}
-QListView, QTreeView, QTableView {{ background: {c['WINDOW']}; color: {c['TEXT']}; border: none; outline: 0; }}
+QListView, QTreeView, QTableView {{ background: transparent; color: {c['TEXT']}; border: none; outline: 0; }}
 QTreeView#Sidebar, QListWidget#Sidebar, QScrollArea#Sidebar, QWidget#Sidebar {{ background: transparent; }}
-QListWidget#Sidebar::item {{ padding: 4px 4px; border-radius: 6px; }}
-QListWidget#Sidebar::item:selected {{ background: {c['ACCENT_SOFT']}; color: {c['TEXT']}; }}
-QListWidget#Sidebar::item:hover:!selected {{ background: {c['HOVER']}; }}
+QListWidget#Sidebar::item {{ padding: 4px 4px 4px 13px; }}
+QListWidget#Sidebar::item:selected, QListWidget#Sidebar::item:hover {{ background: transparent; }}
 QTreeView#Sidebar {{ show-decoration-selected: 0; }}
 QTreeView#Sidebar::item {{ padding: 4px 4px; }}
-QTreeView#Sidebar::item:selected, QTreeView#Sidebar::item:hover {{ background: transparent; color: {c['TEXT']}; }}
-QTableView {{ gridline-color: {c['GRID']}; selection-background-color: {c['ACCENT_SOFT']}; selection-color: {c['TEXT']}; }}
-QHeaderView {{ background: transparent; font-weight: 700; font-size: 8.5pt; }}
+QTreeView#Sidebar::item:selected, QTreeView#Sidebar::item:hover {{ background: transparent; }}
+QTableView {{ gridline-color: {c['GRID']}; selection-background-color: transparent; selection-color: {c['TEXT']}; }}
+QHeaderView {{ background: transparent; font-weight: 500; font-size: 8.5pt; }}
 QHeaderView::section {{
     background: transparent; border: none; border-bottom: 1px solid {c['SEPARATOR']}; padding: 6px 8px;
-    color: {c['MUTED']}; font-weight: 700; font-size: 8.5pt;
+    color: {c['FAINT']}; font-weight: 500; font-size: 8.5pt;
 }}
 QProgressBar {{
-    border: none; border-radius: 4px; background: {c['TRACK']}; color: transparent; max-height: 8px;
+    border: none; border-radius: 2px; background: {c['TRACK']}; color: transparent; max-height: 4px;
 }}
-QProgressBar::chunk {{ background: {c['ACCENT']}; border-radius: 4px; }}
+QProgressBar::chunk {{ background: {premium}; border-radius: 2px; }}
 QScrollArea {{ border: none; background: transparent; }}
 QScrollArea > QWidget > QWidget {{ background: transparent; }}
-QSplitter::handle {{ background: transparent; }}
-QScrollBar:vertical {{ background: transparent; width: 11px; margin: 2px 1px; }}
-QScrollBar:horizontal {{ background: transparent; height: 11px; margin: 1px 2px; }}
-QScrollBar::handle:vertical {{ background: {c['MID']}; border-radius: 4px; min-height: 36px; margin: 0 2px; }}
-QScrollBar::handle:horizontal {{ background: {c['MID']}; border-radius: 4px; min-width: 36px; margin: 2px 0; }}
-QScrollBar::handle:hover {{ background: {c['MUTED']}; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px 1px; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 1px 2px; }}
+QScrollBar::handle:vertical {{ background: {c['MID']}; border-radius: 2px; min-height: 36px; margin: 0 3px; }}
+QScrollBar::handle:horizontal {{ background: {c['MID']}; border-radius: 2px; min-width: 36px; margin: 3px 0; }}
+QScrollBar::handle:hover {{ background: rgba(255,255,255,77); }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 QToolTip {{
-    background: {c['TOOLTIP']}; color: {c['TOOLTIP_TEXT']}; border: none; padding: 6px 9px; border-radius: 7px;
+    background: {c['TOOLTIP']}; color: {c['TEXT']}; border: 1px solid {c['BORDER']}; padding: 6px 10px;
+    border-radius: {RADIUS_WELL}px;
 }}
-QMenu {{ background: {c['PANEL']}; color: {c['TEXT']}; border: 1px solid {c['SEPARATOR']}; padding: 5px; }}
-QMenu::item {{ padding: 6px 22px 6px 12px; border-radius: 6px; }}
-QMenu::item:selected {{ background: {c['ACCENT_SOFT']}; color: {c['TEXT']}; }}
+QMenu {{ background: #0B0B0B; color: {c['TEXT']}; border: 1px solid rgba(255,255,255,23); padding: 6px; }}
+QMenu#AppMenu {{ border-radius: {RADIUS_MENU}px; }}
+QMenu::item {{ padding: 7px 24px 7px 12px; border-radius: 8px; }}
+QMenu::item:selected {{ background: {c['WELL_HOVER']}; color: {c['TEXT']}; }}
 QMenu::item:disabled {{ color: {c['DISABLED']}; }}
-QMenu::separator {{ height: 1px; background: {c['SEPARATOR']}; margin: 4px 10px; }}
+QMenu::separator {{ height: 1px; background: {c['SEPARATOR']}; margin: 5px 10px; }}
 QMenu::icon {{ padding-left: 8px; }}
 QMessageBox QLabel {{ color: {c['TEXT']}; }}
-QPlainTextEdit {{ background: {c['PANEL']}; color: {c['TEXT']}; border: 1px solid {c['SEPARATOR']};
-    border-radius: {RADIUS_CONTROL}px; padding: 6px; }}
+QPlainTextEdit {{ background: {c['PANEL']}; color: {c['TEXT']}; border: 1px solid {c['BORDER']};
+    border-radius: {RADIUS_WELL}px; padding: 6px; }}
 """
 
 
@@ -360,18 +293,17 @@ def _palette() -> QPalette:
     roles = QPalette.ColorRole
     palette = QPalette()
     for role, value in (
-        (roles.Window, WINDOW), (roles.WindowText, TEXT), (roles.Base, PANEL), (roles.AlternateBase, ALT_BASE),
+        (roles.Window, WINDOW), (roles.WindowText, TEXT), (roles.Base, PANEL), (roles.AlternateBase, "#0F0F0F"),
         (roles.Text, TEXT), (roles.Button, PANEL), (roles.ButtonText, TEXT), (roles.BrightText, "#FFFFFF"),
         (roles.Highlight, SELECTION), (roles.HighlightedText, TEXT), (roles.PlaceholderText, PLACEHOLDER),
-        (roles.ToolTipBase, TOOLTIP), (roles.ToolTipText, TOOLTIP_TEXT), (roles.Link, ACCENT_TEXT),
+        (roles.ToolTipBase, TOOLTIP), (roles.ToolTipText, TEXT), (roles.Link, ACCENT_TEXT),
         (roles.LinkVisited, ACCENT_TEXT), (roles.Light, LIGHT_ROLE), (roles.Midlight, MIDLIGHT),
-        (roles.Mid, MID), (roles.Dark, DARK_ROLE), (roles.Shadow, SHADOW),
+        (roles.Mid, "#2A2A2A"), (roles.Dark, DARK_ROLE), (roles.Shadow, SHADOW),
     ):
         palette.setColor(role, QColor(value))
     disabled = QPalette.ColorGroup.Disabled
     for role, value in ((roles.WindowText, DISABLED), (roles.Text, DISABLED), (roles.ButtonText, DISABLED),
-                        (roles.Base, INPUT_DISABLED), (roles.Button, INPUT_DISABLED),
-                        (roles.Highlight, CHECK_ON_OFF)):
+                        (roles.Base, "#0A0A0A"), (roles.Button, "#0A0A0A"), (roles.Highlight, CHECK_ON_OFF)):
         palette.setColor(disabled, role, QColor(value))
     return palette
 
@@ -426,6 +358,7 @@ class FotoditStyle(QProxyStyle):
                 bool(state & flags.State_NoChange), bool(state & flags.State_MouseOver))
 
     def _check_box(self, option, painter) -> None:
+        """Artapa's check box: a well with a ring; checked, it fills with the accent and holds a dark tick."""
         enabled, on, partial, hover = self._state(option)
         side = min(option.rect.width(), option.rect.height()) - 1
         box = QRectF(option.rect.x() + 0.5, option.rect.center().y() - side / 2 + 0.5, side, side)
@@ -435,7 +368,7 @@ class FotoditStyle(QProxyStyle):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(ACCENT if enabled else CHECK_ON_OFF))
             painter.drawRoundedRect(box, 4.5, 4.5)
-            pen = QPen(QColor(ON_ACCENT if enabled else "#FFFFFF"), max(1.7, side / 8))
+            pen = QPen(QColor(ON_ACCENT if enabled else "#A6A6A6"), max(1.7, side / 8))
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             painter.setPen(pen)
@@ -450,9 +383,9 @@ class FotoditStyle(QProxyStyle):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPath(tick)
         else:
-            border = ACCENT if (hover and enabled) else (CHECK_BORDER if enabled else CHECK_BORDER_OFF)
-            painter.setPen(QPen(QColor(border), 1.2))
-            painter.setBrush(QColor(INPUT if enabled else CHECK_OFF))
+            ring = CHECK_BORDER_HOVER if (hover and enabled) else (CHECK_BORDER if enabled else BORDER)
+            painter.setPen(QPen(QColor(ring), 1.2))
+            painter.setBrush(QColor(WELL if enabled else INPUT_DISABLED))
             painter.drawRoundedRect(box.adjusted(0.4, 0.4, -0.4, -0.4), 4.5, 4.5)
         painter.restore()
 
@@ -466,12 +399,12 @@ class FotoditStyle(QProxyStyle):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(ACCENT if enabled else CHECK_ON_OFF))
             painter.drawEllipse(c, side / 2, side / 2)
-            painter.setBrush(QColor(ON_ACCENT if enabled else "#FFFFFF"))
+            painter.setBrush(QColor(ON_ACCENT if enabled else "#A6A6A6"))
             painter.drawEllipse(c, side * 0.19, side * 0.19)
         else:
-            border = ACCENT if (hover and enabled) else (CHECK_BORDER if enabled else CHECK_BORDER_OFF)
-            painter.setPen(QPen(QColor(border), 1.2))
-            painter.setBrush(QColor(INPUT if enabled else CHECK_OFF))
+            ring = CHECK_BORDER_HOVER if (hover and enabled) else (CHECK_BORDER if enabled else BORDER)
+            painter.setPen(QPen(QColor(ring), 1.2))
+            painter.setBrush(QColor(WELL if enabled else INPUT_DISABLED))
             painter.drawEllipse(c, side / 2 - 0.4, side / 2 - 0.4)
         painter.restore()
 
@@ -491,7 +424,7 @@ class FotoditStyle(QProxyStyle):
         c = r.center()
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(QColor(MUTED), 1.6)
+        pen = QPen(QColor(FAINT), 1.6)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -530,10 +463,6 @@ def paint_chevron(painter: QPainter, rect, color: QColor, up: bool = False) -> N
     painter.restore()
 
 
-def system_is_dark() -> bool:
-    return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
-
-
 def _pick_family() -> str:
     from . import fonts
 
@@ -546,20 +475,10 @@ def _pick_family() -> str:
     return QFont().defaultFamily()
 
 
-def apply(app: QApplication, choice: str = LIGHT) -> None:
-    """Shows the app in the chosen variant: LIGHT, DARK or SYSTEM (as Windows is set)."""
-    global _mode, _following, _style, _family, _hinting
-    _mode = choice if choice in MODES else SYSTEM
-    hints = QGuiApplication.styleHints()
-    if _mode == SYSTEM:
-        hints.unsetColorScheme()  # the window frames follow Windows again
-        dark = system_is_dark()
-    else:
-        dark = _mode == DARK
-        hints.setColorScheme(Qt.ColorScheme.Dark if dark else Qt.ColorScheme.Light)
-    if not _following:
-        _following = True
-        hints.colorSchemeChanged.connect(_system_changed)
+def apply(app: QApplication) -> None:
+    """Shows the app in Artapa's look: the palette, the style sheet, the fonts and dark title bars."""
+    global _style, _family, _hinting
+    QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme.Dark)  # the window frames are dark too
     first = _style is None
     if first:
         _style = FotoditStyle()
@@ -571,39 +490,17 @@ def apply(app: QApplication, choice: str = LIGHT) -> None:
             _hinting = QFont.HintingPreference.PreferVerticalHinting
         _family = _pick_family()
         app.setFont(font(BASE_SIZE))
-    changed = first or dark != _dark
-    _use(dark)
     app.setPalette(_palette())
     app.setStyleSheet(_qss())
     class_fonts(app)
-    if changed:
+    if first:
         changes().changed.emit()
-    if changed and not first:
-        # Qt sets the new frame color on its own schedule: the title bars are redrawn shortly after, twice.
-        for delay in (80, 400):
-            QTimer.singleShot(delay, _redraw_frames)
 
 
 def class_fonts(app: QApplication) -> None:
     """Windows gives lists, trees, tables, menus and tooltips fonts of their own (Segoe UI 9), which
-    the app's font does not replace and which come back with every style sheet and theme change:
-    they get the app's typeface too."""
+    the app's font does not replace and which come back with every style sheet change: they get the
+    app's typeface too."""
     for name in ("QAbstractItemView", "QMenu", "QMenuBar", "QMessageBox"):
         app.setFont(font(BASE_SIZE), name)
     app.setFont(font(BASE_SIZE - 0.5), "QTipLabel")
-
-
-def _redraw_frames() -> None:
-    from ..winutil import redraw_frame
-
-    if QGuiApplication.platformName() != "windows":  # e.g. the tests' offscreen windows have no real frame
-        return
-    for widget in QApplication.topLevelWidgets():
-        if widget.isVisible() and widget.testAttribute(Qt.WidgetAttribute.WA_WState_Created):
-            redraw_frame(int(widget.winId()))
-
-
-def _system_changed(_scheme) -> None:
-    app = QApplication.instance()
-    if _mode == SYSTEM and app is not None and system_is_dark() != _dark:
-        apply(app, SYSTEM)

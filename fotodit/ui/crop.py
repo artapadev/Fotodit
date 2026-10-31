@@ -29,7 +29,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 from ..core.edits import Box, Edit, box_fits, largest_box, shrink_to_fit
 from ..i18n import decimal, t
 from . import glass, theme
-from .controls import BarButton, GlassButton, GlassSlider
+from .controls import SILVER, BarButton, PillButton, Slider
 from .widgets import ElidedComboBox, ElidedLabel
 
 ORIGINAL = "original"
@@ -407,8 +407,8 @@ def angle_text(angle: float) -> str:
 
 
 class CropBar(glass.GlassSurface):
-    """The bottom toolbar in crop mode, a capsule of media glass: aspect ratio, 90° rotation,
-    straightening, reset, cancel and apply (the prominent button)."""
+    """The bottom toolbar in crop mode, Artapa's floating pill: aspect ratio, 90° rotation,
+    straightening, reset, cancel and apply (the silver button)."""
 
     aspectChosen = Signal(int)  # index in ASPECTS
     angleChanged = Signal(float)
@@ -429,15 +429,15 @@ class CropBar(glass.GlassSurface):
         self.aspect.setToolTip(t("crop.aspect_tip"))
         self.aspect.setAccessibleName(t("crop.aspect"))
         self.aspect.currentIndexChanged.connect(self.aspectChosen)
-        self.left_btn = BarButton("", "rotate.left", media=True, tooltip=t("common.rotate_left_key"),
+        self.left_btn = BarButton("", "rotate.left", tooltip=t("common.rotate_left_key"),
                                   accessible=t("common.rotate_left"))
         self.left_btn.clicked.connect(lambda: self.rotateRequested.emit(-1))
-        self.right_btn = BarButton("", "rotate.right", media=True, tooltip=t("common.rotate_right_key"),
+        self.right_btn = BarButton("", "rotate.right", tooltip=t("common.rotate_right_key"),
                                    accessible=t("common.rotate_right"))
         self.right_btn.clicked.connect(lambda: self.rotateRequested.emit(1))
-        self.flip_btn = BarButton("", "flip", media=True, tooltip=t("common.flip_key"), accessible=t("common.flip"))
+        self.flip_btn = BarButton("", "flip", tooltip=t("common.flip_key"), accessible=t("common.flip"))
         self.flip_btn.clicked.connect(self.flipRequested)
-        self.slider = GlassSlider(centered=True, media=True)
+        self.slider = Slider(centered=True)
         self.slider.setRange(-450, 450)  # tenths of a degree
         self.slider.setSingleStep(1)
         self.slider.setPageStep(10)
@@ -451,16 +451,16 @@ class CropBar(glass.GlassSurface):
         self.angle_label = QLabel("0°")
         self.angle_label.setMinimumWidth(52)
         self.angle_label.setFont(theme.tabular(self.angle_label.font()))
-        self.reset_btn = BarButton(t("common.reset"), "undo", media=True)
+        self.reset_btn = BarButton(t("common.reset"), "undo")
         self.reset_btn.setToolTip(t("crop.reset_tip"))
         self.reset_btn.clicked.connect(self.resetRequested)
         self.size_label = ElidedLabel()
         self.size_label.setObjectName("PvMuted")
         self.size_label.setFont(theme.tabular(self.size_label.font()))
-        self.cancel_btn = BarButton(t("common.cancel"), None, media=True)
+        self.cancel_btn = BarButton(t("common.cancel"), None)
         self.cancel_btn.setToolTip(t("crop.cancel_tip"))
         self.cancel_btn.clicked.connect(self.cancelRequested)
-        self.apply_btn = GlassButton(t("common.apply"), "checkmark", kind=glass.PROMINENT)
+        self.apply_btn = PillButton(t("common.apply"), "checkmark", kind=SILVER)
         self.apply_btn.setObjectName("PvApply")
         self.apply_btn.setToolTip(t("crop.apply_tip"))
         self.apply_btn.clicked.connect(self.applyRequested)

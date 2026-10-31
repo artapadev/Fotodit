@@ -1,4 +1,4 @@
-"""Windows-specific helpers: Explorer sort order, Recycle Bin, opening folders, window frames."""
+"""Windows-specific helpers: Explorer sort order, Recycle Bin, opening folders, safe file names."""
 
 from __future__ import annotations
 
@@ -245,24 +245,6 @@ def reveal(path: str) -> None:
         os.startfile(path)  # noqa: S606 - the user's folder
     else:
         subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])  # noqa: S603, S607
-
-
-# ---------------------------------------------------------------------- window frames
-
-_WM_NCACTIVATE = 0x0086
-
-
-def redraw_frame(hwnd: int) -> None:
-    """Makes Windows redraw a window's title bar. After the dark/light frame setting changes while
-    the window is open, Windows keeps the old title bar until the window's activation changes; a
-    measured experiment showed that redrawing the frame (SWP_FRAMECHANGED, RedrawWindow) is not
-    enough, but drawing it once as inactive and then in its real state is."""
-    if not IS_WINDOWS or not hwnd:  # pragma: no cover
-        return
-    user32 = ctypes.windll.user32
-    active = user32.GetForegroundWindow() == hwnd
-    user32.SendMessageW(wintypes.HWND(hwnd), _WM_NCACTIVATE, not active, 0)
-    user32.SendMessageW(wintypes.HWND(hwnd), _WM_NCACTIVATE, active, 0)
 
 
 _INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')

@@ -47,14 +47,12 @@ _ORDER = {k: i for i, k in enumerate((
 
 
 class InfoPanel(QWidget):
-    """`colors`: fixed colors for the tokens it uses (the large preview's always-dark look);
-    by default the theme's. `contentChanged` follows every new text (the preview's card fits it)."""
+    """`contentChanged` follows every new text (the preview's card fits it)."""
 
     contentChanged = Signal()
 
-    def __init__(self, parent=None, title_name: str = "SectionTitle", colors: dict[str, str] | None = None):
+    def __init__(self, parent=None, title_name: str = "SectionTitle"):
         super().__init__(parent)
-        self.colors = colors
         self._title = title = QLabel(t("info.title"))
         title.setObjectName(title_name)
         self.body = QLabel()
@@ -105,9 +103,8 @@ class InfoPanel(QWidget):
         self.body.setText(text)
         self.contentChanged.emit()
 
-    def _c(self, token: str) -> str:
-        if self.colors is not None and token in self.colors:
-            return self.colors[token]
+    @staticmethod
+    def _c(token: str) -> str:
         return getattr(theme, token)
 
     def clear(self) -> None:
@@ -129,7 +126,7 @@ class InfoPanel(QWidget):
             self._cache.move_to_end(key)
             self._render(path, *self._cache[key])
             return
-        self._set_text(f"<b style='color:{self._c('TEXT')}'>{html.escape(os.path.basename(path))}</b><br>"
+        self._set_text(f"<span style='color:{self._c('TEXT')}; font-weight:600'>{html.escape(os.path.basename(path))}</span><br>"
                           f"<span style='color:{self._c('MUTED')}'>{t('info.reading')}</span>")
         self._pool.clear()
         self._pool.start(_ScanTask(path, self._emitter))
@@ -149,7 +146,7 @@ class InfoPanel(QWidget):
         esc = html.escape
         name = esc(os.path.basename(path))
         muted, warn, ok, text = self._c("MUTED"), self._c("WARN"), self._c("SUCCESS"), self._c("TEXT")
-        parts = [f"<div style='color:{text}'><b style='font-size:10.5pt'>{name}</b>"]
+        parts = [f"<div style='color:{text}'><span style='font-size:10.5pt; font-weight:600'>{name}</span>"]
         details = []
         if info.width:
             details.append(f"{info.width} × {info.height}")
@@ -187,7 +184,7 @@ class InfoPanel(QWidget):
         if lines:
             parts.append("<p style='margin-top:8px'>" + "<br>".join(lines) + "</p>")
         if result is None or result.clean:
-            parts.append(f"<p style='color:{ok}'><b>{t('info.clean')}</b></p>")
+            parts.append(f"<p style='color:{ok}; font-weight:600'>{t('info.clean')}</p>")
         else:
             items = []
             ordered = sorted(result.findings, key=lambda f: (not f.sensitive, _ORDER.get(f.kind, 99)))
@@ -196,7 +193,7 @@ class InfoPanel(QWidget):
                 weight = "600" if f.sensitive else "400"
                 detail = f" <span style='color:{muted}'>({esc(f.detail)})</span>" if f.detail else ""
                 items.append(f"<span style='color:{color}; font-weight:{weight}'>•&nbsp;{esc(f.label)}</span>{detail}")
-            parts.append(f"<p style='margin-top:8px'><b>{t('info.found', n=len(result.findings))}</b><br>")
+            parts.append(f"<p style='margin-top:8px'><span style='font-weight:600'>{t('info.found', n=len(result.findings))}</span><br>")
             parts.append("<br>".join(items) + "</p>")
             hint = (t("info.hint_raw")
                     if info.fmt == Fmt.RAW else t("info.hint"))

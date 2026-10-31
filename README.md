@@ -10,9 +10,9 @@ serial number, author, editing history, embedded thumbnails, GPS tracks …), co
 JPG** and videos **to MP4**, **rotates, flips and crops** them, adjusts their **exposure** (RAW photos from
 their RAW data), **shrinks** photos for sharing, **trims** videos and **removes parts** or the **sound** from
 them, **plays** them, finds **duplicates** in a selection, and in bulk **sorts and renames** files (photos and
-videos separately, by number or by capture date) or **groups them into folders**. Its interface follows
-Apple's Liquid Glass design as iOS 27 draws it, in black, white and greys (color only for warnings and
-errors), in a light and a dark look, in Turkish or English. It works entirely offline.
+videos separately, by number or by capture date) or **groups them into folders**. Its interface takes the
+look of Artapa's website (artapa.com): dark greys with a few soft tones, frosted toolbars, silver buttons and
+the Onest typeface, in Turkish or English. It works entirely offline.
 
 Fotodit is free and open source software under the **GNU General Public License, version 3 or later**
 (see [LICENSE](LICENSE)); the components it is built on and their licenses are listed in
@@ -134,13 +134,10 @@ Built from source (see [For developers](#for-developers)), the same programs are
    * Edits are **not written to the file right away**; they are applied (together with the other options)
      when processing starts. Even if you choose no other operation, edited files are saved with their
      edits. If you close Fotodit while there are unapplied edits, it asks first.
-   * **Görünüm** (appearance), at the bottom of the left panel: **Windows ayarına uy** (follow the Windows
-     setting; the default), **Açık** (light) or **Koyu** (dark); the window frames turn dark too. As in iOS,
-     **Cam: Daha şeffaf / Varsayılan / Daha buzlu** (glass: clearer / default / frostier) sets how much of
-     what lies behind the glass surfaces shows through, and **Saydamlığı azalt** (reduce transparency) makes
-     them solid. **Dil** (language): **Windows ayarına uy** (follow Windows; the default), **Türkçe** or
-     **English**; the texts change when Fotodit starts again, which it offers to do at once (**Yeniden
-     Başlat**, restart). The choices are remembered.
+   * **Görünüm** (appearance), at the bottom of the left panel: **Saydamlığı azalt** (reduce transparency)
+     makes the frosted toolbars and dialogs solid. **Dil** (language): **Windows ayarına uy** (follow Windows;
+     the default), **Türkçe** or **English**; the texts change when Fotodit starts again, which it offers to
+     do at once (**Yeniden Başlat**, restart). The choices are remembered.
    * **Fotodit 1.3.0**, next to it (or **F1**), opens **Hakkında** (about): the version, the license, and the
      components Fotodit is built on with their license texts.
 3. **Turn on the operations (right panel).** An operation's settings appear while it is on; hovering over a
@@ -376,21 +373,21 @@ fotodit/
                     converting to MP4), hwenc.py GPU encoder (test encode, falling back to the CPU)
   i18n/             the texts in Turkish (tr.json) and English (en.json), t() with plurals, and numbers,
                     sizes and dates written each language's way
-  ui/               PySide6 UI. The Liquid Glass design (iOS 27): glass.py the material (backdrop,
-                    two-path frost, refraction, edge light and contour, shadow; three looks), controls.py
-                    glass buttons, segmented control, switches, sliders, toast, icons.py the icons
-                    (Hugeicons' data drawn as vectors, moving on hover), motion.py springs, theme.py light
-                    and dark colors (black, white and greys), fonts.py the bundled Inter typeface, chrome.py
-                    the floating toolbars and their backing, sheet.py dialogs as glass sheets. The screens:
+  ui/               PySide6 UI in the look of artapa.com: glass.py the materials (the calm stage, the
+                    cards, the frosted pills and sheets, their shadows), controls.py the buttons (silver,
+                    secondary, red), tabs, switches, sliders, toast, icons.py the icons (Hugeicons' data
+                    drawn as vectors, moving on hover), motion.py springs, theme.py the colors (dark),
+                    fonts.py the bundled Onest typeface, chrome.py the stage, the cards and the floating
+                    toolbars, sheet.py dialogs as cards over the dimmed window. The screens:
                     main_window.py, browser.py (Gözat), selected_page.py (Seçilenler), nav.py (folders),
                     options_panel.py (operations), preview_dialog.py (large preview), player.py (video
                     playback, trimming, removing parts), softplayer.py (PyAV backup player for AV1 …),
                     crop.py (crop tool), exposure.py (exposure slider), edit_store.py (edits until
                     processing starts), run_dialog.py (progress and results), about.py (About)
-  resources/        fonts/ (Inter), icons/ (the Hugeicons data), the app icon
+  resources/        fonts/ (Onest), icons/ (the Hugeicons data), the app icon
   app.py            start-up: settings, language, theme, the main window
   selftest.py       --self-test of the packaged app
-  winutil.py        Windows helpers: Explorer's name order, the Recycle Bin, window frames
+  winutil.py        Windows helpers: Explorer's name order, the Recycle Bin, safe file names
 tests/
   unit/             tests without Qt (formats, metadata, processing, video, planning, texts, layout)
   ui/               tests of the interface (offscreen Qt) and smoke_run.py (the UI smoke run with screenshots)

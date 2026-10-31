@@ -9,9 +9,8 @@ to the window; double-click or Z switches to the 100% (actual pixels) view, wher
 can be dragged with the mouse. F11: full screen, I: metadata panel, Esc: close. Holding O
 shows the photo as it is in the file, without its edits (before/after).
 
-The look: the photo sits on a dark stage, and behind it the stage carries a blurred, darkened
-copy of the photo (Apple's background extension), so the controls floating above it as clear
-glass bend real color. The title and the tools float at the top, the exposure or video
+The look: the photo sits on Artapa's dark stage, neutral, so nothing sways how its colors look.
+The title and the tools float at the top as Artapa's floating pills, the exposure or video
 controls and the thumbnail strip at the bottom; the photo is fitted between them, so nothing
 covers it. While a video plays, the controls step aside after a few seconds without the mouse.
 
@@ -39,11 +38,9 @@ from __future__ import annotations
 
 import math
 import os
-import time
 from collections import OrderedDict
 from dataclasses import dataclass, fields, replace
 
-import numpy as np
 from PySide6.QtCore import (
     QAbstractListModel,
     QEvent,
@@ -114,38 +111,39 @@ from .selection import Selection, norm
 from .thumbs import LOADING, ThumbnailLoader, _to_qimage
 from .widgets import ElidedLabel, paint_edit_badge, paint_video_badge
 
-VIEW_BG = "#0C0C0C"
-LIGHT = "#F2F2F2"
-DIM = "#ABABAB"
+VIEW_BG = theme.PAGE
+LIGHT = theme.TEXT
+DIM = theme.MUTED
 CACHE_BYTES = 300 * 1024 * 1024  # memory limit for prepared images
 MARGIN = 14  # the floating controls' distance from the window's edges
 GAP = 10
 NAME_MIN = 120  # the file name's narrowest width in the title capsule (the tools beside it show only icons sooner)
 CHROME_IDLE_MS = 2600  # a playing video: the controls step aside after this long without the mouse
-# The info panel's colors on the dark stage (it uses the theme's elsewhere).
-MEDIA_COLORS = {"TEXT": LIGHT, "MUTED": DIM, "WARN": "#FFB340", "SUCCESS": LIGHT, "DANGER": "#FF6961"}
 
 QSS = f"""
 QDialog#Preview {{ background: {VIEW_BG}; }}
 QDialog#Preview QLabel {{ color: {LIGHT}; }}
 QDialog#Preview QLabel#PvMuted {{ color: {DIM}; }}
-QDialog#Preview QLabel#PvWarn {{ color: #FFB340; }}
+QDialog#Preview QLabel#PvWarn {{ color: {theme.WARN}; }}
 QDialog#Preview QLabel#PvTarget {{ color: {LIGHT}; }}
-QDialog#Preview QLabel#PvDanger {{ color: #FF6961; }}
+QDialog#Preview QLabel#PvDanger {{ color: {theme.DANGER}; }}
 QDialog#Preview QLabel#PvEdit {{ color: {LIGHT}; }}
-QDialog#Preview QLabel#PvTitle {{ color: {LIGHT}; font-weight: 700; }}
+QDialog#Preview QLabel#PvTitle {{ color: {LIGHT}; font-weight: 600; }}
 QDialog#Preview QLabel#PvChipOn {{
-    background: {LIGHT}; color: {VIEW_BG}; border-radius: 13px; font-weight: 600;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.SILVER_TOP}, stop:0.55 {theme.SILVER_MIDDLE},
+        stop:1 {theme.SILVER_FOOT});
+    color: {theme.ON_ACCENT}; border-radius: 13px; font-weight: 600;
 }}
 QDialog#Preview QLabel#PvChipOff {{
-    background: rgba(255,255,255,0.16); color: {LIGHT}; border-radius: 13px;
+    background: rgba(255,255,255,0.10); color: {LIGHT}; border-radius: 13px;
 }}
 QDialog#Preview QComboBox {{
-    background: rgba(255,255,255,0.12); color: {LIGHT}; border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 8px; padding: 4px 9px;
+    background: rgba(255,255,255,0.08); color: {LIGHT}; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: {theme.RADIUS_WELL}px; padding: 4px 10px;
 }}
 QDialog#Preview QComboBox QAbstractItemView {{
-    background: #2C2C2C; color: {LIGHT}; selection-background-color: #4D4D4D; border: 1px solid #3A3A3A;
+    background: {theme.PANEL}; color: {LIGHT}; selection-background-color: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.16);
 }}
 QListView#PvStrip {{ background: transparent; border: none; }}
 QListView#PvStrip QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 0 14px; }}
@@ -271,20 +269,6 @@ class PreviewLoader(QObject):
 # ---------------------------------------------------------------- image area
 
 
-def ambient_of(image: QImage) -> QImage:
-    """Apple's background extension for a photo: a tiny, blurred, darkened and slightly calmer copy
-    of it, enlarged to fill the stage behind the photo (dark enough not to sway how its colors look)."""
-    small = image.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-    small = small.convertToFormat(glass.FMT)
-    a = glass.blur(glass.pixels(small), 2, passes=3)
-    lum = a[..., :3] @ np.array([0.0722, 0.7152, 0.2126], np.float32)
-    a[..., :3] = (lum[..., None] + (a[..., :3] - lum[..., None]) * 0.9) * 0.40
-    a[..., 3] = 255
-    out = np.clip(a, 0, 255).astype(np.uint8)
-    h, w = out.shape[:2]
-    return QImage(np.ascontiguousarray(out).data, w, h, w * 4, glass.FMT).copy()
-
-
 class ImageView(QWidget):
     """Shows the image fitted to its safe area (between the floating controls) or at 100%;
     edge arrows and panning.
@@ -340,9 +324,6 @@ class ImageView(QWidget):
         self._safe: QRect | None = None  # where the image is fitted (between the floating controls)
         self._buffer: QImage | None = None
         self._dirty = True
-        self._ambient: QImage | None = None
-        self._ambient_at = 0.0
-        self._arrow_glass = glass.GlassRenderer(self, glass.MEDIA, None)
 
     # ------------------------------------------------------------ state
 
@@ -364,14 +345,11 @@ class ImageView(QWidget):
         """`natural`: the photo's actual (unedited) size; the image is laid out as if it had this
         size (an image prepared at screen size is enlarged as needed when the window is larger).
         `placeholder`: a thumbnail shown while preparing; replaced by the sharp image when ready."""
-        changed_source = pixmap is not self._pixmap
         self._pixmap = pixmap
         self._frame = None
         self._natural = natural
         self._placeholder = placeholder
         self._message = message
-        if changed_source:
-            self._ambient = ambient_of(pixmap.toImage()) if pixmap is not None else None
         if self._full and self._focus is not None and pixmap is not None:
             # Keep the double-clicked point under the cursor (the placeholder is drawn at the same size).
             fx, fy, anchor = self._focus
@@ -394,10 +372,6 @@ class ImageView(QWidget):
         if image is not None:
             self._placeholder = False
             self._message = ""
-            now = time.monotonic()
-            if self._ambient is None or now - self._ambient_at > 0.5:  # the backdrop follows the video slowly
-                self._ambient = ambient_of(image)
-                self._ambient_at = now
         self.scene_changed()
 
     def set_message(self, message: str) -> None:
@@ -537,17 +511,7 @@ class ImageView(QWidget):
     # ------------------------------------------------------------ painting
 
     def _paint_stage(self, p: QPainter) -> None:
-        p.fillRect(self.rect(), QColor(VIEW_BG))
-        if self._ambient is not None and self._crop is None:
-            # The background extension: the photo, enlarged to cover the stage, blurred and darkened.
-            amb = self._ambient
-            r = QRectF(self.rect())
-            scale = max(r.width() / amb.width(), r.height() / amb.height())
-            w, h = amb.width() * scale, amb.height() * scale
-            p.save()
-            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            p.drawImage(QRectF(r.center().x() - w / 2, r.center().y() - h / 2, w, h), amb)
-            p.restore()
+        glass.paint_stage(p, QRectF(self.rect()), self.devicePixelRatioF() or 1.0, VIEW_BG)
         if self.has_image():
             rect = self.canvas_rect() if self._crop is not None else self.image_rect()
             smooth = not self._full or self._placeholder or bool(self.shown_edit().angle)
@@ -621,13 +585,13 @@ class ImageView(QWidget):
                                        "chevron.left" if side < 0 else "chevron.right", 1.0 if hot else 0.8)
 
     def _paint_button(self, p: QPainter, c: QPointF, r: float, icon: str, strength: float) -> None:
-        """A round button of clear glass over the stage (the edge arrows, play)."""
+        """A round button over the stage (the edge arrows, play), as Artapa's round glass play button:
+        what lies beneath blurred 14 px under rgb(12 12 12 / .42), a ring and a line of light."""
         rect = QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r)
         dpr = self.devicePixelRatioF() or 1.0
-        mat = glass.material(glass.MEDIA)
-        margin = self._arrow_glass.margin(mat)
+        mat = glass.material(glass.ROUND)
+        margin = glass.margin_of(mat)
         area = rect.toAlignedRect().adjusted(-margin, -margin, margin, margin)
-        glass.paint_contour(p, rect, None, mat, dpr)
         if glass.reduce_transparency():
             glass.paint_glass(p, rect, None, mat, None, dpr)
         else:
@@ -638,7 +602,7 @@ class ImageView(QWidget):
             bp.drawImage(QPointF(-area.x(), -area.y()), self._ensure_buffer())
             bp.end()
             w = h = max(1, round(2 * r * dpr))
-            image, luminance = glass.render_glass(backdrop, round(margin * dpr), w, h, r * dpr, mat, dpr)
+            image, luminance = glass.render_glass(backdrop, round(margin * dpr), w, h, mat, dpr)
             glass.paint_glass(p, rect, image, mat, None, dpr,
                               QColor(255, 255, 255, int(28 * (strength - 0.8) * 5)) if strength > 0.8 else None,
                               luminance)
@@ -831,7 +795,7 @@ class StripDelegate(QStyledItemDelegate):
             painter.fillRect(r, QColor(0, 0, 0, 120))
         painter.restore()
         if row == self.model.current:
-            painter.setPen(QPen(QColor("#FFFFFF"), 2.5))
+            painter.setPen(QPen(QColor(theme.ACCENT), 2.5))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(r.adjusted(-1.5, -1.5, 1.5, 1.5), 8.5, 8.5)
         if is_video_name(item.name):
@@ -945,7 +909,7 @@ class PreviewDialog(QDialog):
         self.title.setObjectName("PvTitle")
         title_font = QFont(self.font())
         title_font.setPointSizeF(title_font.pointSizeF() + 1.5)
-        title_font.setWeight(QFont.Weight.Bold)
+        title_font.setWeight(QFont.Weight.DemiBold)
         self.title.setFont(title_font)
         self.position = QLabel()
         self.position.setObjectName("PvMuted")
@@ -991,40 +955,40 @@ class PreviewDialog(QDialog):
         row.addWidget(self.target)
 
         # Top right: editing, selection, viewing and closing, each group on its own capsule.
-        self.left_btn = BarButton("", "rotate.left", media=True, tooltip=t("common.rotate_left_key"),
+        self.left_btn = BarButton("", "rotate.left", tooltip=t("common.rotate_left_key"),
                                   accessible=t("common.rotate_left"))
         self.left_btn.clicked.connect(lambda: self.rotate(-1))
-        self.right_btn = BarButton("", "rotate.right", media=True, tooltip=t("common.rotate_right_key"),
+        self.right_btn = BarButton("", "rotate.right", tooltip=t("common.rotate_right_key"),
                                    accessible=t("common.rotate_right"))
         self.right_btn.clicked.connect(lambda: self.rotate(1))
-        self.flip_btn = BarButton("", "flip", media=True, tooltip=t("common.flip_key"), accessible=t("common.flip"))
+        self.flip_btn = BarButton("", "flip", tooltip=t("common.flip_key"), accessible=t("common.flip"))
         self.flip_btn.clicked.connect(self.flip)
-        self.crop_btn = BarButton(t("preview.crop"), "crop", media=True)
+        self.crop_btn = BarButton(t("preview.crop"), "crop")
         self.crop_btn.setCheckable(True)
         self.crop_btn.setToolTip(t("preview.crop_tip"))
         self.crop_btn.clicked.connect(self._crop_clicked)
-        self.compare_btn = BarButton("", "compare", media=True,
+        self.compare_btn = BarButton("", "compare",
                                      tooltip=t("preview.original_tip"),
                                      accessible=t("preview.original"))
         self.compare_btn.pressed.connect(lambda: self.set_comparing(True))
         self.compare_btn.released.connect(lambda: self.set_comparing(False))
-        self.toggle_btn = BarButton("", "checkmark.circle", media=True)
+        self.toggle_btn = BarButton("", "checkmark.circle")
         self.toggle_btn.setToolTip(t("preview.toggle_tip"))
         self.toggle_btn.clicked.connect(self.toggle_selected)
-        self.info_btn = BarButton("", "info", media=True, tooltip=t("preview.info_tip"),
+        self.info_btn = BarButton("", "info", tooltip=t("preview.info_tip"),
                                   accessible=t("preview.info"))
         self.info_btn.setCheckable(True)
         self.info_btn.toggled.connect(self._show_info)
-        self.zoom_btn = BarButton(percent(100), "zoom.in", media=True)
+        self.zoom_btn = BarButton(percent(100), "zoom.in")
         self.zoom_btn.setToolTip(t("preview.zoom_tip"))
         self.zoom_btn.clicked.connect(lambda: self.toggle_zoom())
-        self.full_btn = BarButton("", "fullscreen", media=True, tooltip=t("preview.fullscreen_tip"),
+        self.full_btn = BarButton("", "fullscreen", tooltip=t("preview.fullscreen_tip"),
                                   accessible=t("preview.fullscreen"))
         self.full_btn.clicked.connect(self.toggle_fullscreen)
-        self.reveal_btn = BarButton("", "folder", media=True, tooltip=t("preview.reveal_tip"),
+        self.reveal_btn = BarButton("", "folder", tooltip=t("preview.reveal_tip"),
                                     accessible=t("preview.reveal"))
         self.reveal_btn.clicked.connect(lambda: reveal(self.current().path))
-        close_btn = BarButton("", "xmark", media=True, tooltip=t("preview.close_tip"), accessible=t("common.close"))
+        close_btn = BarButton("", "xmark", tooltip=t("preview.close_tip"), accessible=t("common.close"))
         close_btn.clicked.connect(self.accept)
         self.edit_tools = ToolGroup(self.left_btn, self.right_btn, self.flip_btn, self.crop_btn, self.compare_btn,
                                     parent=self, kind=glass.MEDIA)
@@ -1040,7 +1004,7 @@ class PreviewDialog(QDialog):
             b.setDefault(False)
 
         # Metadata panel (optional, a dark glass panel on the right).
-        self.info_panel = InfoPanel(colors=MEDIA_COLORS)
+        self.info_panel = InfoPanel()
         self.info_card = glass.GlassSurface(self, kind=glass.MEDIA, radius=20)
         self.info_card.setObjectName("Media")
         card_layout = QVBoxLayout(self.info_card)
