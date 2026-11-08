@@ -1037,7 +1037,7 @@ rotation, crop or exposure.
 
 | Option | Assessment |
 |---|---|
-| **Python 3.14 + Pillow 12.3 + pillow-heif 1.8 + rawpy 0.27 (LibRaw 0.22) + PyAV 18.1 (FFmpeg 8.1) + PySide6 (Qt 6.12, including Multimedia) + PyInstaller 6.22** ✅ | Pillow offers JPEG (libjpeg-turbo), PNG, WebP, **AVIF**, TIFF and **LittleCMS** color management in a single package. pillow-heif provides HEIC reading/writing, rawpy/LibRaw RAW decoding, PyAV video reading/writing. Qt provides a fast thumbnail grid, video playback and a native Windows look. (The project started on Python 3.13; it moved to 3.14 when 3.13 was removed from the computer.) |
+| **Python 3.14 + Pillow 13.0 + pillow-heif 1.8 + rawpy 0.28 (LibRaw 0.22) + PyAV 18.1 (FFmpeg 8.1) + PySide6 (Qt 6.12, including Multimedia) + PyInstaller 6.22** ✅ | Pillow offers JPEG (libjpeg-turbo), PNG, WebP, **AVIF**, TIFF and **LittleCMS** color management in a single package. pillow-heif provides HEIC reading/writing, rawpy/LibRaw RAW decoding, PyAV video reading/writing. Qt provides a fast thumbnail grid, video playback and a native Windows look. (The project started on Python 3.13; it moved to 3.14 when 3.13 was removed from the computer.) |
 | C# / .NET + Magick.NET | Powerful, but the .NET SDK was not installed; ImageMagick's metadata behavior is harder to control. |
 | Tkinter | The package would be small, but a grid with thousands of thumbnails and a modern look are hard to achieve. |
 | Electron | 150 MB+ package, unnecessary bulk. |

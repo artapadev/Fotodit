@@ -86,25 +86,25 @@ them), the release as a whole is distributed under the GPL, version 3.
 - mingw-w64 winpthreads (`libwinpthread-1.dll`): MIT and others, `licenses\mingw-w64-winpthreads.txt`.
   https://www.mingw-w64.org
 
-### Pillow 12.3.0 (images)
+### Pillow 13.0.0 (images)
 - License: MIT-CMU. Pillow bundles brotli, FreeType, HarfBuzz, Little CMS, libavif, libjpeg-turbo,
   libpng, libwebp, OpenJPEG, LibTIFF, XZ and zlib-ng; the same file holds their licenses:
   `licenses\python-packages\pillow\LICENSE`
 - https://python-pillow.org
 
-### pillow-heif 1.8.0 (HEIC and HEIF)
+### pillow-heif 1.8.1 (HEIC and HEIF)
 - License: BSD-3-Clause: `licenses\python-packages\pillow_heif\`
-- It bundles libheif 1.23.4 (LGPL-3.0, `licenses\LGPL-3.0.txt`), libde265 1.1.3 (LGPL-3.0), x265 4.2
+- It bundles libheif 1.23.6 (LGPL-3.0, `licenses\LGPL-3.0.txt`), libde265 1.1.3 (LGPL-3.0), x265 4.3
   (GPL-2.0-or-later) and the MinGW runtime listed above.
-- https://github.com/bigcat88/pillow_heif, https://github.com/strukturag/libheif/tree/v1.23.4,
+- https://github.com/bigcat88/pillow_heif, https://github.com/strukturag/libheif/tree/v1.23.6,
   https://github.com/strukturag/libde265/tree/v1.1.3
 
-### rawpy 0.27.1 and LibRaw 0.22.1 (RAW photos)
+### rawpy 0.28.0 and LibRaw 0.22.2 (RAW photos)
 - rawpy: MIT. LibRaw: LGPL-2.1 or CDDL-1.0, used under the LGPL-2.1. Texts:
   `licenses\python-packages\rawpy\`
 - https://github.com/letmaik/rawpy, https://www.libraw.org
 
-### NumPy 2.5.3
+### NumPy 2.5.4
 - License: BSD-3-Clause and others. NumPy bundles OpenBLAS (scipy-openblas) with parts of LAPACK and
   the GCC runtime they need: `licenses\python-packages\numpy\`
 - https://numpy.org
