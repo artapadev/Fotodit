@@ -37,6 +37,8 @@ from fotodit.core.video.process import (
     VIDEO_KEEP,
     VideoCancelled,
     VideoError,
+    _AudioEncoder,
+    _SubtitleConverter,
     _Window,
     edit_reason,
     geometry,
@@ -84,7 +86,7 @@ def _corners(im) -> dict[str, str]:
     ("a.avi", Fmt.AVI, {"fmt": "avi", "vcodec": "mjpeg", "pix_fmt": "yuvj420p", "audio": None}),
     ("a.mts", Fmt.MTS, {"fmt": "mpegts", "audio": "ac3"}),
     ("a.wmv", Fmt.WMV, {"fmt": "asf", "vcodec": "wmv2", "audio": "wmav2"}),
-    ("a.3gp", Fmt.THREEGP, {"fmt": "3gp", "vcodec": "mpeg4", "audio": "libopencore_amrnb", "size": (176, 144)}),
+    ("a.3gp", Fmt.THREEGP, {"fmt": "3gp", "vcodec": "mpeg4", "audio": "amr_nb", "size": (176, 144)}),
 ])
 def test_sniff_video_containers(tmp_path, name, fmt, kw):
     path = make_video(str(tmp_path / name), frames_n=6, **kw)
@@ -379,7 +381,7 @@ def test_convert_keep_copies_hevc_with_hvc1(tmp_path):
     ({"fmt": "avi", "vcodec": "mjpeg", "pix_fmt": "yuvj420p", "audio": "pcm_s16le"}, ("h264", "aac")),
     ({"fmt": "asf", "vcodec": "wmv2", "audio": "wmav2"}, ("h264", "aac")),
     ({"fmt": "webm", "vcodec": "libvpx-vp9", "audio": "libopus"}, ("h264", "aac")),
-    ({"fmt": "3gp", "vcodec": "mpeg4", "audio": "libopencore_amrnb", "size": (176, 144)}, ("h264", "aac")),
+    ({"fmt": "3gp", "vcodec": "mpeg4", "audio": "amr_nb", "size": (176, 144)}, ("h264", "aac")),
 ])
 def test_convert_legacy_formats(tmp_path, kw, codecs):
     src = make_video(str(tmp_path / "src.bin"), frames_n=10, **kw)
@@ -679,6 +681,45 @@ def test_window_maps_times_across_removed_parts():
                 {"start": 3500, "end": 6500, "time_base": Fraction(1, 1000)},
                 {"start": 6500, "end": 7000, "time_base": Fraction(1, 1000)}]
     assert [(c["start"], c["end"]) for c in w.chapters(chapters)] == [(0, 2000), (2000, 4000)]
+
+
+@dataclass
+class _Packet:
+    time_base: object
+    pts: int = 48000
+    duration: int = 1024
+    size: int = 10
+
+
+class _Decoder:
+    """Stands in for a decoder: keeps what it is given."""
+
+    def __init__(self):
+        self.packets = []
+
+    def decode(self, packet):
+        self.packets.append(packet)
+        return []
+
+    decode2 = decode
+
+
+def test_a_packet_without_a_time_base_is_not_taken_for_one_at_0():
+    """PyAV gives an unset time base as a falsy 0/1, not as None. A trimmed video's audio decodes such a
+    packet (instead of dropping it as long before the start); a subtitle cue that cannot be placed is
+    skipped (instead of dividing by zero)."""
+    unset = av.AVRational(0, 1)
+    audio = object.__new__(_AudioEncoder)
+    audio.window = _Window(start=5.0, end=9.0, base=0.0, key_pts=0, seek=False)
+    audio.decoder = _Decoder()
+    audio.feed(_Packet(unset))
+    assert len(audio.decoder.packets) == 1
+    audio.feed(_Packet(Fraction(1, 48000)))  # at 1 s: long before the start, not decoded
+    assert len(audio.decoder.packets) == 1
+    cues = object.__new__(_SubtitleConverter)
+    cues.decoder = _Decoder()
+    cues.feed(_Packet(unset))
+    assert not cues.decoder.packets
 
 
 def test_cuts_remove_parts_from_the_middle(tmp_path):

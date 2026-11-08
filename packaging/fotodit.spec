@@ -44,7 +44,7 @@ a = Analysis(
     datas=[(os.path.join(ROOT, "fotodit", "resources"), os.path.join("fotodit", "resources")),
            (os.path.join(ROOT, "fotodit", "i18n", "*.json"), os.path.join("fotodit", "i18n")),  # the texts
            *legal_files()],
-    # Video: PyAV (FFmpeg 8, x264/x265 → av.libs) and Qt Multimedia for playback (FFmpeg backend,
+    # Video: PyAV (FFmpeg 9, x264/x265 → av.libs) and Qt Multimedia for playback (FFmpeg backend,
     # the avcodec-63 … DLLs in the PySide6 folder). Both are imported inside functions.
     hiddenimports=["pillow_heif", "av", "PySide6.QtMultimedia"],
     excludes=[

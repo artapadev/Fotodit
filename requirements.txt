@@ -5,6 +5,6 @@ PySide6-Essentials==6.12.0
 # Video playback (QtMultimedia with the FFmpeg backend). Must be the same version as PySide6-Essentials.
 PySide6-Addons==6.12.0
 rawpy==0.28.0
-# Video reading, conversion, metadata stripping (FFmpeg 8.1; the Windows wheel bundles x264/x265 → GPL).
-# PyAV 19 (FFmpeg 9.0): time bases are never None and the tests' AMR encoder is gone; adapt both first.
-av==18.1.0
+# Video reading, conversion, metadata stripping (FFmpeg 9.0; the Windows wheel bundles x264/x265 → GPL).
+# Since PyAV 19 a time base or frame rate is never None: an unset one is a falsy 0/1, so test it with `not`.
+av==19.0.2

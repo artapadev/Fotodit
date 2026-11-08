@@ -611,7 +611,7 @@ class _Job:
                 handler = handlers[packet.stream.index]
                 handler.feed(packet)
                 if packet.stream.index == video_index and duration and packet.pts is not None \
-                        and packet.time_base is not None:
+                        and packet.time_base:
                     t = float(packet.pts * packet.time_base)
                     self._report((w.out_time(t) if w is not None else t) / duration)
                 if w is not None and handler.finished and all(h.finished for h in dense):
@@ -987,7 +987,7 @@ class _SubtitleConverter:
         _copy_disposition(stream, self.ostream)
 
     def feed(self, packet) -> None:
-        if packet.pts is None or not packet.size or packet.time_base is None:
+        if packet.pts is None or not packet.size or not packet.time_base:  # (an unset time base is 0/1)
             return
         try:
             subtitle_set = self.decoder.decode2(packet)
@@ -1233,7 +1233,7 @@ class _AudioEncoder:
 
     def feed(self, packet) -> None:
         w = self.window
-        if w is not None and packet.pts is not None and packet.time_base is not None and \
+        if w is not None and packet.pts is not None and packet.time_base and \
                 float((packet.pts + (packet.duration or 0)) * packet.time_base) < w.start - AUDIO_PREROLL:
             return  # long before a trimmed video's start: not decoded
         for frame in self.decoder.decode(packet):

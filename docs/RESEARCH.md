@@ -552,12 +552,12 @@ program.
 
 | Option | Assessment |
 |---|---|
-| **PyAV 18.1 (FFmpeg 8.1.2) + Qt Multimedia (PySide6-Addons 6.12.0)** ✅ | PyAV uses FFmpeg's libraries in-process: packet-by-packet reading/writing (which allows byte-level work such as SEI cleaning), frame decoding, filter graphs, encoding. The Windows wheel comes with x264, x265, dav1d, SVT-AV1, libvpx, Opus, LAME and AMR (27.6 MB). Qt Multimedia provides ready-made playback with audio and A/V sync (with its own FFmpeg 9.0.1, LGPL). |
+| **PyAV 19.0 (FFmpeg 9.0.2) + Qt Multimedia (PySide6-Addons 6.12.0)** ✅ | PyAV uses FFmpeg's libraries in-process: packet-by-packet reading/writing (which allows byte-level work such as SEI cleaning), frame decoding, filter graphs, encoding. The Windows wheel comes with x264, x265, dav1d, SVT-AV1, libvpx, Opus and LAME (28.2 MB); the AMR sound of old phones' 3GP videos is read with FFmpeg's own decoders. Qt Multimedia provides ready-made playback with audio and A/V sync (with its own FFmpeg 9.0.1, LGPL). |
 | The installed `ffmpeg.exe` (winget, 9.0.1 "full") | Solid for conversion but 222 MB; packet-level cleaning is not possible from the command line, and there is no player. |
 | Windows Media Foundation (ctypes) | Needs no download but is very fragile via COM; HEVC requires a paid extension (not present on this computer), and MKV/WebM/AVI support is lacking. |
 | Writing the player with PyAV (waveOut for audio) | Possible, but many things such as A/V sync, seeking and audio device changes would have to be rewritten. |
 
-The downloads were made with the user's approval: `av-18.1.0-cp311-abi3-win_amd64.whl` (27.6 MB) and
+The downloads were made with the user's approval: `av-19.0.2-cp312-abi3-win_amd64.whl` (28.2 MB) and
 `pyside6_addons-6.11.2-cp310-abi3-win_amd64.whl` (168.2 MB; only the playback part goes into the package). Qt 6.12,
 a long-term release and the last one for Windows 10, later took its place (PySide6, PySide6-Addons and Shiboken6
 6.12.0).
@@ -628,7 +628,7 @@ track removed. Previously every subtitle track in an MP4 triggered a GPS warning
 data"; now the content of the track is examined.
 
 When converting to MP4, SRT, ASS and WebVTT subtitles in MKV/WebM are converted to MP4's subtitle format (mov_text)
-(PyAV 18's subtitle decoder + the mov_text encoder; italic/bold are preserved, and ASS's own styles are read from its
+(PyAV 19's subtitle decoder + the mov_text encoder; italic/bold are preserved, and ASS's own styles are read from its
 header). DVD subtitles (bitmaps) are written to MP4 as they are; Blu-ray (PGS) subtitles do not fit into MP4 and are
 dropped with a note.
 
@@ -1037,7 +1037,7 @@ rotation, crop or exposure.
 
 | Option | Assessment |
 |---|---|
-| **Python 3.14 + Pillow 13.0 + pillow-heif 1.8 + rawpy 0.28 (LibRaw 0.22) + PyAV 18.1 (FFmpeg 8.1) + PySide6 (Qt 6.12, including Multimedia) + PyInstaller 6.22** ✅ | Pillow offers JPEG (libjpeg-turbo), PNG, WebP, **AVIF**, TIFF and **LittleCMS** color management in a single package. pillow-heif provides HEIC reading/writing, rawpy/LibRaw RAW decoding, PyAV video reading/writing. Qt provides a fast thumbnail grid, video playback and a native Windows look. (The project started on Python 3.13; it moved to 3.14 when 3.13 was removed from the computer.) |
+| **Python 3.14 + Pillow 13.0 + pillow-heif 1.8 + rawpy 0.28 (LibRaw 0.22) + PyAV 19.0 (FFmpeg 9.0) + PySide6 (Qt 6.12, including Multimedia) + PyInstaller 6.22** ✅ | Pillow offers JPEG (libjpeg-turbo), PNG, WebP, **AVIF**, TIFF and **LittleCMS** color management in a single package. pillow-heif provides HEIC reading/writing, rawpy/LibRaw RAW decoding, PyAV video reading/writing. Qt provides a fast thumbnail grid, video playback and a native Windows look. (The project started on Python 3.13; it moved to 3.14 when 3.13 was removed from the computer.) |
 | C# / .NET + Magick.NET | Powerful, but the .NET SDK was not installed; ImageMagick's metadata behavior is harder to control. |
 | Tkinter | The package would be small, but a grid with thousands of thumbnails and a modern look are hard to achieve. |
 | Electron | 150 MB+ package, unnecessary bulk. |
@@ -1047,7 +1047,7 @@ rotation, crop or exposure.
 more prone to antivirus false positives; the folder distribution is therefore recommended. Unused Qt components (the
 20 MB software OpenGL, network/TLS plugins, OpenSSL, translations into other languages) are left out of the package.
 RAW support adds ~30 MB; most of this is the OpenBLAS library that the core of numpy (a rawpy dependency) links
-against (it cannot be removed). Video support adds ~110 MB: PyAV's FFmpeg and its encoders (63 MB; none of them can be
+against (it cannot be removed). Video support adds ~110 MB: PyAV's FFmpeg and its encoders (64 MB; none of them can be
 removed because FFmpeg links against them) plus Qt Multimedia and its own FFmpeg (~40 MB).
 `Fotodit.exe --self-test report.txt` verifies, in the packaged application, the 8 formats, both RAW paths, the
 exposure of a JPEG, keeping Display P3, the horizontal flip, keeping the capture date, the size limit and, for
@@ -1220,10 +1220,10 @@ Example: converting 500 phone photos to JPG and cleaning them takes about 5 minu
 ## 11. Open source and distribution
 
 **License: GPL-3.0-or-later.** The license is not a free choice here. The PyAV wheel's FFmpeg is built under the
-LGPL 3 (`--enable-version3`), but it is linked with **x264 and x265 (GPL 2 or later)** and with **opencore-amr
-(Apache 2.0)**; pillow-heif's wheel also bundles x265. Distributing those binaries together with Fotodit makes one
-combined work under the GPL, and Apache-2.0 code is compatible only with version 3 of the GPL: so the release, and
-Fotodit's own code, are licensed under the **GPL, version 3 or later** (copyright © 2026 Artapa). The other
+LGPL 3 (`--enable-version3`), but it is linked with **x264 and x265 (GPL 2 or later)**; pillow-heif's wheel also
+bundles x265. Distributing those binaries together with Fotodit makes one combined work under the GPL, and LGPL 3
+code (this FFmpeg, Qt, libheif) is compatible only with version 3 of the GPL: so the release, and Fotodit's own
+code, are licensed under the **GPL, version 3 or later** (copyright © 2026 Artapa). The other
 components are compatible with that: Qt/PySide6 (LGPL 3), Qt's own FFmpeg (LGPL 2.1+), LibRaw (LGPL 2.1), libheif and
 libde265 (LGPL 3), BSD/MIT codecs, Python (PSF), the GCC runtime (GPL 3 with the runtime exception), PyInstaller's
 bootloader (GPL 2+ with an exception for any program). Building without the GPL codecs (an LGPL release) would mean

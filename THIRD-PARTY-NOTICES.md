@@ -25,8 +25,8 @@ them), the release as a whole is distributed under the GPL, version 3.
 - The Python packages: their source distributions on PyPI (`https://pypi.org/project/<name>/<version>/`)
   and the project pages listed below.
 - FFmpeg and the codec libraries in `_internal\av.libs`: built from their upstream sources by the PyAV
-  project's build scripts, https://github.com/PyAV-Org/pyav-ffmpeg (the build for FFmpeg 8.1.2); each
-  library's own source is listed below.
+  project's build scripts, https://github.com/PyAV-Org/pyav-ffmpeg (its release 9.0.2-1, the build for
+  FFmpeg 9.0.2); each library's own source is listed below.
 - If a source listed here stops being available, ask in Fotodit's repository and a copy of that exact
   source will be provided.
 
@@ -53,27 +53,27 @@ them), the release as a whole is distributed under the GPL, version 3.
 - License: LGPL-2.1-or-later: `licenses\LGPL-2.1.txt`
 - https://ffmpeg.org
 
-### PyAV 18.1.0 (reading and writing videos)
+### PyAV 19.0.2 (reading and writing videos)
 - License: BSD-3-Clause: `licenses\python-packages\av\LICENSE.txt`
 - https://github.com/PyAV-Org/PyAV
 
-### FFmpeg 8.1.2 and the libraries it uses (`_internal\av.libs`)
+### FFmpeg 9.0.2 and the libraries it uses (`_internal\av.libs`)
 - FFmpeg is built under the LGPL-3.0-or-later; linked with x264 and x265, it is distributed under the
-  GPL-3.0-or-later: `LICENSE`, `licenses\LGPL-3.0.txt`. Source: https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
+  GPL-3.0-or-later: `LICENSE`, `licenses\LGPL-3.0.txt`. Source: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
 - x264 (H.264 encoder): GPL-2.0-or-later, `licenses\GPL-2.0.txt`. https://code.videolan.org/videolan/x264
-- x265 4.2 (HEVC encoder): GPL-2.0-or-later, `licenses\GPL-2.0.txt`. https://bitbucket.org/multicoreware/x265_git
-- dav1d 1.5.3 (AV1 decoder): BSD-2-Clause, `licenses\dav1d.txt`. https://code.videolan.org/videolan/dav1d
-- SVT-AV1 4.1.0 (AV1 encoder): BSD-3-Clause-Clear and the Alliance for Open Media Patent License 1.0,
+- x265 4.3 (HEVC encoder): GPL-2.0-or-later, `licenses\GPL-2.0.txt`. https://github.com/Multicorewareinc/x265
+- dav1d 1.5.4 (AV1 decoder): BSD-2-Clause, `licenses\dav1d.txt`. https://code.videolan.org/videolan/dav1d
+- SVT-AV1 4.2.0 (AV1 encoder): BSD-3-Clause-Clear and the Alliance for Open Media Patent License 1.0,
   `licenses\SVT-AV1.txt`. https://gitlab.com/AOMediaCodec/SVT-AV1
-- libvpx 1.16.0 (VP8/VP9): BSD-3-Clause and a patent grant, `licenses\libvpx.txt`.
+- libvpx 1.17.0 (VP8/VP9): BSD-3-Clause and a patent grant, `licenses\libvpx.txt`.
   https://chromium.googlesource.com/webm/libvpx
 - Opus 1.6.1: BSD-3-Clause, `licenses\opus.txt`. https://opus-codec.org
-- LAME 3.100 (MP3 encoder): LGPL-2.0-or-later, used under version 2.1, `licenses\LGPL-2.1.txt`.
-  https://lame.sourceforge.io
-- opencore-amr (AMR-NB and AMR-WB): Apache-2.0, `licenses\Apache-2.0.txt` and
-  `licenses\opencore-amr-NOTICE.txt`. https://sourceforge.net/projects/opencore-amr/
+- LAME 3.101.0 (MP3 encoder, inside `avcodec-63.dll`; basswood-io's continuation of LAME): LGPL-2.0-or-later,
+  used under version 2.1, `licenses\LGPL-2.1.txt`. https://github.com/basswood-io/bwlame
 - libwebp, libwebpmux and libsharpyuv: BSD-3-Clause and a patent grant, `licenses\libwebp.txt`.
   https://chromium.googlesource.com/webm/libwebp
+- libvmaf 3.2.1 (Netflix's video quality measure, FFmpeg's `libvmaf` filter): BSD-2-Clause-Patent,
+  `licenses\libvmaf.txt`. https://github.com/Netflix/vmaf
 - Intel Video Processing Library (libvpl): MIT, `licenses\libvpl.txt`. https://github.com/intel/libvpl
 - NVIDIA codec headers (compiled into FFmpeg): MIT, `licenses\nv-codec-headers.txt`.
   https://github.com/FFmpeg/nv-codec-headers

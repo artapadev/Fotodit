@@ -80,7 +80,9 @@ def make_video(path: str, *, fmt: str = "mp4", vcodec: str = "libx264", size=(32
                subtitle_language: str | None = None, extra_subtitles: tuple = (), chapters: bool = False,
                options: dict | None = None, gop: int | None = None, audio_tracks: int = 1,
                timecode: str | None = None, sar: fractions.Fraction | None = None) -> str:
-    """`rotation`: clockwise rotation on display (like a phone video shot in portrait).
+    """`audio`: the audio encoder, or "amr_nb" for the AMR speech of old phones' 3GP videos (copied
+    from frames written by hand: PyAV's FFmpeg decodes AMR but has no encoder for it).
+    `rotation`: clockwise rotation on display (like a phone video shot in portrait).
     `sei`: SEI user data payloads to add to the first frame (e.g. `mdpm_payload()`).
     `subtitle`: a single line of text or [(start ms, end ms, text), …] (may contain ASS style codes);
     `extra_subtitles`: additional tracks as (cues, codec, language) triples.
@@ -112,12 +114,16 @@ def make_video(path: str, *, fmt: str = "mp4", vcodec: str = "libx264", size=(32
         v.metadata["timecode"] = timecode
     if rotation:
         v.set_display_rotation((-rotation) % 360)
-    sounds = []
-    for _ in range(audio_tracks if audio else 0):
-        a = out.add_stream(audio, rate=48000 if audio != "libopencore_amrnb" else 8000,
-                           layout="stereo" if audio != "libopencore_amrnb" else "mono")
-        if audio in ("wmav2", "libopencore_amrnb"):
-            a.bit_rate = 12200 if audio == "libopencore_amrnb" else 128000
+    sounds, copied = [], []
+    for n in range(audio_tracks if audio else 0):
+        if audio == "amr_nb":
+            raw = _amr_nb_file(f"{path}.{n}.amr", frames_n / fps)
+            amr = av.open(raw)
+            copied.append((raw, amr, out.add_stream_from_template(amr.streams.audio[0])))
+            continue
+        a = out.add_stream(audio, rate=48000, layout="stereo")
+        if audio == "wmav2":
+            a.bit_rate = 128000
         sounds.append(a)
     data = None
     if gpmd:
@@ -159,6 +165,13 @@ def make_video(path: str, *, fmt: str = "mp4", vcodec: str = "libx264", size=(32
         out.mux(packet)
     for a in sounds:
         _add_audio(out, a, frames_n / fps)
+    for raw, amr, a in copied:
+        for packet in amr.demux(amr.streams.audio[0]):
+            if packet.dts is not None:
+                packet.stream = a
+                out.mux(packet)
+        amr.close()
+        os.remove(raw)
     if data is not None:
         for i in range(3):
             packet = av.Packet(b"DEVC" + b"GPS5" + struct.pack(">iiiii", 410082000, 289784000, 50, 0, 0))
@@ -218,6 +231,16 @@ def _add_audio(out, stream, seconds: float) -> None:
             out.mux(packet)
     for packet in stream.encode():
         out.mux(packet)
+
+
+def _amr_nb_file(path: str, seconds: float) -> str:
+    """An AMR-NB file in RFC 4867's storage format: "#!AMR\\n", then a 20 ms frame at 12.2 kbit/s (a header
+    byte and 31 bytes of speech parameters, here a fixed pattern) for every 160 samples."""
+    with open(path, "wb") as fh:
+        fh.write(b"#!AMR\n")
+        for i in range(max(1, round(seconds / 0.02))):
+            fh.write(bytes([7 << 3 | 1 << 2]) + bytes((i * 31 + k * 7) & 0xFF for k in range(31)))
+    return path
 
 
 def first_frame(path: str):

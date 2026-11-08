@@ -2,7 +2,7 @@
 data embedded in the bitstream (`bitstream`), MP4/MOV boxes (`boxes`), HDR tone mapping
 (`tonemap`) and thumbnails (`thumb`).
 
-Videos are read and written with PyAV (FFmpeg 8). FFmpeg writes detailed info lines for every
+Videos are read and written with PyAV (FFmpeg 9). FFmpeg writes detailed info lines for every
 file (encoder settings, stream dump); in a windowed app these only bloat the log file, so on
 first use FFmpeg's log level is limited to errors.
 """
