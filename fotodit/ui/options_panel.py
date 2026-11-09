@@ -12,7 +12,7 @@ import os
 import threading
 from datetime import datetime
 
-from PySide6.QtCore import QObject, QRectF, QSettings, QStandardPaths, Qt, Signal
+from PySide6.QtCore import QObject, QRect, QRectF, QSettings, QStandardPaths, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSpinBox,
+    QStyle,
+    QStyleOptionSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -214,8 +216,23 @@ def _title(text: str) -> QLabel:
     return label
 
 
+def _number_width(spin: QSpinBox) -> int:
+    """The width at which a number box shows its largest number whole: its frame and arrows (from
+    the style), the digits in its own font, the 2 px its line edit keeps on either side and the cursor."""
+    spin.ensurePolished()
+    opt = QStyleOptionSpinBox()
+    spin.initStyleOption(opt)
+    opt.rect = QRect(0, 0, 200, 30)
+    field = spin.style().subControlRect(QStyle.ComplexControl.CC_SpinBox, opt,
+                                        QStyle.SubControl.SC_SpinBoxEditField, spin)
+    digits = spin.fontMetrics().horizontalAdvance(spin.textFromValue(spin.maximum()))
+    return opt.rect.width() - field.width() + digits + 5
+
+
 def _pair(edit: QLineEdit, spin: QSpinBox) -> QWidget:
-    """Rename row: prefix and start number side by side."""
+    """Rename row: prefix and start number side by side. The number box is only as wide as its
+    largest number, so the prefix field gets the rest: with 84 px for the number, the English photo
+    field at 1440 px showed "Photo_" as "hoto_"."""
     row = QWidget()
     lay = QHBoxLayout(row)
     lay.setContentsMargins(0, 0, 0, 0)
@@ -224,7 +241,7 @@ def _pair(edit: QLineEdit, spin: QSpinBox) -> QWidget:
     first = QLabel(t("options.first_no"))
     first.setObjectName("Muted")
     lay.addWidget(first)
-    spin.setMaximumWidth(84)
+    spin.setFixedWidth(_number_width(spin))
     lay.addWidget(spin)
     return row
 

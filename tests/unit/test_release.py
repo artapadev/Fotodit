@@ -239,3 +239,20 @@ def test_spec_bundles_every_license_text():
         assert any(target == f"legal/licenses/python-packages/{package}" for _, target in files), package
     assert ("LICENSE.LibRaw", "legal/licenses/python-packages/rawpy") in files
     assert not any(name.endswith((".py", ".pyc", ".json")) for name, _ in files)
+
+
+def test_spec_declares_per_monitor_v2_dpi_awareness():
+    """Fotodit.exe's manifest declares Per-Monitor v2 for the Store's certification kit (Qt sets the same at
+    run time) and keeps PyInstaller's own entries; the self-test checks the built exe itself."""
+    from xml.etree import ElementTree
+
+    from PyInstaller.utils.win32.winmanifest import create_application_manifest
+
+    source = (ROOT / "packaging" / "fotodit.spec").read_text(encoding="utf-8")
+    namespace = {"os": os, "SPECPATH": str(ROOT / "packaging")}
+    exec(source[source.index("ROOT = "):source.index("a = Analysis(")], namespace)  # noqa: S102
+    assert "manifest=exe_manifest()," in source[source.index("common = dict("):]  # both builds' EXE() get it
+    root = ElementTree.fromstring(create_application_manifest(namespace["exe_manifest"]().encode("utf-8")))
+    settings = {el.tag.rpartition("}")[2]: el.text for el in root.iter() if el.tag.endswith(("Aware", "Awareness"))}
+    assert settings == {"longPathAware": "true", "dpiAware": "true", "dpiAwareness": "PerMonitorV2"}
+    assert next(el for el in root.iter() if el.tag.endswith("requestedExecutionLevel")).get("level") == "asInvoker"

@@ -38,6 +38,19 @@ def legal_files():
     return files
 
 
+def exe_manifest():
+    """PyInstaller's own manifest for Fotodit.exe plus Per-Monitor v2 DPI awareness, in the two lines
+    Microsoft's documentation gives: Qt sets the same awareness at run time, but the Store's
+    certification kit reads it from the manifest."""
+    from PyInstaller.utils.win32.winmanifest import create_application_manifest
+
+    xml = create_application_manifest().decode("utf-8")
+    dpi = ('<dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>'
+           '<dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>')
+    assert xml.count("</windowsSettings>") == 1, "PyInstaller's manifest template has changed"
+    return xml.replace("</windowsSettings>", dpi + "</windowsSettings>")
+
+
 a = Analysis(
     [os.path.join(ROOT, "packaging", "run_fotodit.py")],
     pathex=[ROOT],
@@ -82,6 +95,7 @@ common = dict(
     name="Fotodit",
     icon=os.path.join(ROOT, "fotodit", "resources", "fotodit.ico"),
     version=os.path.join(ROOT, "packaging", "version_info.txt"),
+    manifest=exe_manifest(),
     console=False,
     upx=False,
     debug=False,

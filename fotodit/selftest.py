@@ -6,7 +6,8 @@ stripped; RAW (LibRaw, also with an exposure), the exposure of other photos, kee
 space, keeping only the capture date, shrinking for sharing, folder scanning, the large preview and
 rotate/crop/flip are covered too. For video, FFmpeg
 (PyAV), x264, trimming without re-encoding, removing a part (re-encoded), Qt's playback plugin and
-the backup player are exercised; and the license files must be in the bundle. Exit code 0 = passed.
+the backup player are exercised; the license files must be in the bundle, and the exe must declare
+Per-Monitor v2 DPI awareness. Exit code 0 = passed.
 """
 
 from __future__ import annotations
@@ -221,6 +222,25 @@ def _sharing_checks(im: Image.Image, exif: bytes, lines: list[str]) -> bool:
     return good1 and good2
 
 
+def _dpi_check(lines: list[str]) -> bool:
+    """Fotodit.exe declares Per-Monitor v2 DPI awareness in its manifest (the Store's certification
+    kit looks for it there), so the process has it before Qt starts; Qt would set the same later.
+    From source python.exe's own manifest applies, and there is nothing to check."""
+    import sys
+
+    if not getattr(sys, "frozen", False) or sys.platform != "win32":
+        return True
+    import ctypes
+
+    user32 = ctypes.WinDLL("user32")
+    user32.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+    user32.AreDpiAwarenessContextsEqual.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+    per_monitor_v2 = ctypes.c_void_p(-4)  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+    good = bool(user32.AreDpiAwarenessContextsEqual(user32.GetThreadDpiAwarenessContext(), per_monitor_v2))
+    lines.append(f"DPI awareness from the manifest: {'Per-Monitor v2' if good else 'FAIL (not declared)'}")
+    return good
+
+
 def _legal_check(lines: list[str]) -> bool:
     """Fotodit's license, the notices and the license texts are in the bundle (the About window)."""
     import os
@@ -377,6 +397,7 @@ def run(report_path: str | None = None) -> int:
     lines: list[str] = []
     ok = True
     try:
+        ok &= _dpi_check(lines)  # first: Qt, started by the video checks, would set the awareness itself
         ensure_plugins()
         import pillow_heif
 

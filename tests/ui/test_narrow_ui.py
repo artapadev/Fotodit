@@ -1,7 +1,7 @@
-"""A narrow window, in English (the longer texts): the footer's buttons keep their whole words, a pop-up
-button ends a long choice in "…" and lists every choice in full, pop-up buttons and number boxes show
-their arrows, a narrow column's title ends in "…", and scrolling the options over a box changes
-nothing (offscreen Qt)."""
+"""A narrow window, in English (the longer texts): the footer's buttons keep their whole words, the
+prefix fields show a whole prefix at 1440 px, a pop-up button ends a long choice in "…" and lists
+every choice in full, pop-up buttons and number boxes show their arrows, a narrow column's title ends
+in "…", and scrolling the options over a box changes nothing (offscreen Qt)."""
 
 from __future__ import annotations
 
@@ -11,13 +11,16 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QPoint, QPointF, QSettings, Qt  # noqa: E402
-from PySide6.QtGui import QColor, QImage, QPainter, QWheelEvent  # noqa: E402
+from PySide6.QtCore import QPoint, QPointF, QRect, QSettings, Qt  # noqa: E402
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QWheelEvent  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QComboBox,
     QHeaderView,
+    QLineEdit,
     QSpinBox,
+    QStyle,
+    QStyleOptionFrame,
     QWidget,
 )
 
@@ -81,6 +84,50 @@ def test_the_footer_keeps_its_words_in_the_narrowest_window(app, tmp_path, engli
     finally:
         win._confirm_discard_edits = lambda count: True
         win.close()
+
+
+def _text_area(edit: QLineEdit) -> QRect:
+    """Where a line edit draws its text, as QLineEdit computes it: its contents less the text margins
+    and the 2 px it keeps on either side. A text wider than this (with the cursor) scrolls."""
+    opt = QStyleOptionFrame()
+    edit.initStyleOption(opt)
+    rect = edit.style().subElementRect(QStyle.SubElement.SE_LineEditContents, opt, edit)
+    return rect.marginsRemoved(edit.textMargins()).adjusted(2, 0, -2, 0)
+
+
+def test_the_prefix_fields_show_a_whole_prefix_at_1440_px(app, tmp_path, english):
+    """At 1440 px the English photo prefix field showed "Photo_" as "hoto_": the start-number box
+    beside it took 84 px where its largest number needs 69. Measured in the app's font and style
+    sheet, with the cursor at the end of the text as after typing it."""
+    from fotodit.ui import fonts, theme
+
+    old_font, old_sheet = app.font(), app.styleSheet()
+    if fonts.load():
+        font = QFont(fonts.FAMILY)
+        font.setPointSizeF(theme.BASE_SIZE)
+        app.setFont(font)
+    app.setStyleSheet(theme._qss())
+    win = _window(tmp_path)
+    try:
+        win.resize(1440, 880)
+        win.show()
+        options = win.options
+        options.rename.setChecked(True)
+        app.processEvents()
+        for edit, text in ((options.prefix, "Photo_"), (options.video_prefix, "Video_")):
+            edit.setText(text)
+            area = _text_area(edit)
+            assert area.width() >= edit.fontMetrics().horizontalAdvance(text) + 1, text  # the text and the cursor
+            edit.grab()  # (painting scrolls a text that does not fit)
+            assert edit.cursorPositionAt(QPoint(area.left(), area.center().y())) == 0, text  # its first letter shows
+        for box in (options.start, options.video_start):
+            box.setValue(box.maximum())
+            assert _text_area(box.lineEdit()).width() >= box.fontMetrics().horizontalAdvance(box.text()) + 1
+    finally:
+        win._confirm_discard_edits = lambda count: True
+        win.close()
+        app.setStyleSheet(old_sheet)
+        app.setFont(old_font)
 
 
 def test_a_long_choice_ends_in_an_ellipsis_and_is_listed_in_full(app, english):
