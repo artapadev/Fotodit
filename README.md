@@ -45,7 +45,9 @@ Built from source (see [For developers](#for-developers)), the same programs are
 `dist\onefile\`.
 
 > Tip: if you put a shortcut to `Fotodit.exe` into the `shell:sendto` folder, you can select photos in File
-> Explorer and add them straight to the selection with right-click → **Send to → Fotodit**.
+> Explorer and add them straight to the selection with right-click → **Send to → Fotodit**. Installed as a
+> package (MSIX), Fotodit keeps `Fotodit.exe` in a folder Windows protects: there the shortcut points to
+> `%LOCALAPPDATA%\Microsoft\WindowsApps\fotodit.exe`.
 
 ## Usage
 

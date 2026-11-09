@@ -41,6 +41,21 @@ def resource(name: str) -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", name)
 
 
+def long_path(path: str) -> str:
+    """The long form of a path. Explorer's Send To hands a packaged (MSIX) Fotodit old 8.3 names
+    (DENEME~1.JPG), which would otherwise be shown and would name the outputs."""
+    if sys.platform != "win32":
+        return path
+    import ctypes
+
+    get = ctypes.windll.kernel32.GetLongPathNameW
+    size = get(path, None, 0)
+    if not size:
+        return path  # (a path that does not exist stays as it is)
+    buffer = ctypes.create_unicode_buffer(size)
+    return buffer.value if get(path, buffer, size) else path
+
+
 def _setup_logging() -> str:
     log_path = os.path.join(data_dir(), "fotodit.log")
     handler = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
@@ -137,7 +152,7 @@ def main() -> int:
     ensure_plugins()
     window = MainWindow(settings, icon)
     window.show()
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    args = [long_path(a) for a in sys.argv[1:] if not a.startswith("-")]
     if args:
         window.open_paths(args)
     return app.exec()
