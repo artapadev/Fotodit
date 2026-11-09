@@ -33,6 +33,10 @@ Download one of the release zips and unpack it; no installation is needed:
 * `Fotodit-<version>-windows-x64-portable.zip`: a single `Fotodit.exe` (about 100 MB). It is easier to
   copy, but it starts a few seconds later because it unpacks itself into a temporary folder every time.
 
+Next to them, `Fotodit-<version>-source.zip` holds Fotodit's source code, and
+`Fotodit-<version>-third-party-sources.zip` the sources of the GPL and LGPL parts inside the programs
+(FFmpeg, x264, x265 and others) with the build scripts and patches that made them.
+
 `SHA256SUMS.txt` next to the zips lets you check a download (`certutil -hashfile <zip> SHA256`). As long as
 the exe is not signed (see [Signing](#signing)), Windows SmartScreen may say "Windows protected your PC" the
 first time: **More info → Run anyway**. Windows 10 and 11 (64-bit) are supported.
@@ -317,6 +321,9 @@ Lint: `.venv\Scripts\python.exe -m ruff check --select F,E9,W6,I,B --ignore B008
 * `Fotodit-<version>-windows-x64.zip` and `Fotodit-<version>-windows-x64-portable.zip`, each with
   `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and the `licenses` folder next to `Fotodit.exe`;
 * `Fotodit-<version>-source.zip`, the source code (what the GPL calls the Corresponding Source of Fotodit);
+* `Fotodit-<version>-third-party-sources.zip`, the sources of the GPL and LGPL parts inside the programs
+  (FFmpeg, x264, x265, LAME, GNU libiconv, libheif, libde265) with the build scripts and patches that made
+  them, and a `README.txt` that says where each file comes from;
 * `SHA256SUMS.txt`.
 
 The packing stops if a license text that `THIRD-PARTY-NOTICES.md` names is missing from the build. The
@@ -324,9 +331,20 @@ license files are collected by `packaging\fotodit.spec` (the texts in `licenses/
 packages ship) and are also inside the exe, where the About window shows them. When you upgrade a
 dependency, update its version and license in `THIRD-PARTY-NOTICES.md`.
 
-The release contains GPL-licensed libraries (x264 and x265, inside FFmpeg), so it has to be offered
-together with their source. `THIRD-PARTY-NOTICES.md` says where each component's source is; attaching
-copies of those source archives to each release is the safest way to keep them available.
+The release contains GPL-licensed libraries (x264 and x265 inside FFmpeg, x265 also inside pillow-heif), so
+it is offered together with their source, in the third-party sources zip. `packaging/third_party_sources.json`
+lists those files with their addresses and SHA-256; `packaging\fetch_sources.py` downloads them into
+`third-party-sources\` (kept out of git) and checks them, and the packing stops if one is missing or differs.
+Downloading is a step of its own, before the build, so the build and the packing stay offline:
+
+```powershell
+.venv\Scripts\python.exe packaging\fetch_sources.py           # download what is missing, check all
+.venv\Scripts\python.exe packaging\fetch_sources.py --check   # check only, download nothing
+```
+
+When PyAV or pillow-heif changes, change the list with it (a test compares the list with
+`requirements.txt`): the new build's archives with the SHA-256 that the build's own scripts pin, and for a
+file nobody pins, the size and SHA-256 that `fetch_sources.py` prints, once the file is checked by hand.
 
 ### Signing
 

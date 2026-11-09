@@ -1,0 +1,143 @@
+{
+  "about": "The sources of the GPL and LGPL parts inside the Windows release, with the build scripts and patches that made them. packaging/fetch_sources.py downloads them into third-party-sources/ and checks them; packaging/package_release.py packs them into Fotodit-<version>-third-party-sources.zip. When PyAV or pillow-heif changes, change this list with it.",
+  "pyav": "19.0.2",
+  "pyav_ffmpeg": {
+    "release": "9.0.2-1",
+    "commit": "bac889417e26be29615cb6a3f38318151fed55cd"
+  },
+  "pillow_heif": "1.8.1",
+  "files": [
+    {
+      "component": "pyav-ffmpeg",
+      "part": "av.libs",
+      "file": "pyav-ffmpeg-bac889417e26be29615cb6a3f38318151fed55cd.tar.gz",
+      "url": "https://github.com/PyAV-Org/pyav-ffmpeg/archive/bac889417e26be29615cb6a3f38318151fed55cd.tar.gz",
+      "sha256": "18cb507f2651902bbd824aec838262a6ac2c85a9883b629360322acadd4c4bfd",
+      "size": 20729,
+      "what": "PyAV's FFmpeg build 9.0.2-1: the build scripts, the CI workflow and the patches. scripts/pkg.py names every source archive and its SHA-256",
+      "license": "",
+      "checked": "the commit id the archive carries, and every file equal to that commit"
+    },
+    {
+      "component": "ffmpeg",
+      "part": "av.libs",
+      "file": "ffmpeg-9.0.2.tar.xz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+      "size": 12040788,
+      "what": "FFmpeg 9.0.2: avcodec, avdevice, avfilter, avformat, avutil, swresample and swscale",
+      "license": "LGPL-3.0-or-later; GPL-3.0-or-later as built with x264 and x265",
+      "checked": "the SHA-256 pinned in the build's scripts/pkg.py"
+    },
+    {
+      "component": "ffmpeg-signature",
+      "part": "av.libs",
+      "file": "ffmpeg-9.0.2.tar.xz.asc",
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz.asc",
+      "sha256": "d617fd94ea354dadd2a8bb16243d37c44e1e9729b06b6ad58fe30bfb0fa943f2",
+      "size": 520,
+      "what": "FFmpeg's signature of the archive above",
+      "license": "",
+      "checked": "a PGP signature, as ffmpeg.org publishes it"
+    },
+    {
+      "component": "x264",
+      "part": "av.libs",
+      "file": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2",
+      "url": "https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2",
+      "sha256": "6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224",
+      "size": 848719,
+      "what": "x264 at commit b35605ace3ddf7c1a5d67a2eb553f034aef41d55 (libx264-165)",
+      "license": "GPL-2.0-or-later",
+      "checked": "the SHA-256 pinned in the build's scripts/pkg.py"
+    },
+    {
+      "component": "x265",
+      "part": "av.libs",
+      "file": "x265_4.3.tar.gz",
+      "url": "https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz",
+      "sha256": "83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121",
+      "size": 2052112,
+      "what": "x265 4.3 (libx265, version string 4.3+1-e9b8812)",
+      "license": "GPL-2.0-or-later",
+      "checked": "the SHA-256 pinned in the build's scripts/pkg.py"
+    },
+    {
+      "component": "lame",
+      "part": "av.libs",
+      "file": "bwlame-3.101.0.tar.gz",
+      "url": "https://github.com/basswood-io/bwlame/archive/refs/tags/v3.101.0.tar.gz",
+      "sha256": "506d8a6e855f59151a5407d848557f9ac10acad6ff61718c7b0b3441221bfe72",
+      "size": 404521,
+      "what": "LAME 3.101.0, basswood-io's continuation of LAME, built into avcodec-63. The build fetched it as lamer-3.101.0.tar.gz, before the repository was renamed from lamer to bwlame",
+      "license": "LGPL-2.0-or-later",
+      "checked": "every file equals the tag v3.101.0 (commit 3ffd14f5531e0e5078e31eba4b2fb6ccc277b843). The archive's own SHA-256 differs from the one pinned in the build's scripts/pkg.py (81839b16fdc401e20b73389d05f32a7656008f43bcb960feff290d6f08fc109e) because GitHub now names its top folder after the renamed repository"
+    },
+    {
+      "component": "libiconv",
+      "part": "av.libs",
+      "file": "mingw-w64-libiconv-1.19-1.src.tar.zst",
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-libiconv-1.19-1.src.tar.zst",
+      "sha256": "74428280c17094da5b702c29b2e1a0abae59556ea5dfdd65705cc8ccc1e000fb",
+      "size": 5131029,
+      "what": "GNU libiconv 1.19 (libiconv-2), copied from the MSYS2 toolchain by the build: the upstream source with MSYS2's patches and build recipe",
+      "license": "LGPL-2.1-or-later",
+      "checked": "every file inside equals the checksum in its own MSYS2 recipe"
+    },
+    {
+      "component": "pyav",
+      "part": "av.libs",
+      "file": "av-19.0.2.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/23/01/76b6bf563fe907597cf58f10d10168e93fe588b6db9f2658db87e87efa7e/av-19.0.2.tar.gz",
+      "sha256": "bebbc52598886480f4d861c575dc2b020785d6c04e1308680ddcc545e1b94c66",
+      "size": 4277157,
+      "what": "PyAV 19.0.2, the Python package that loads these libraries; its scripts/ffmpeg-latest.json names the build above",
+      "license": "BSD-3-Clause",
+      "checked": "the SHA-256 that PyPI publishes"
+    },
+    {
+      "component": "x265",
+      "part": "pillow-heif",
+      "file": "mingw-w64-x265-4.3-1.src.tar.zst",
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-x265-4.3-1.src.tar.zst",
+      "sha256": "f2f94e2dd88cd9ce917bd68eb6cb3f41e15d63d56efbfa386416800efa3eae10",
+      "size": 2035612,
+      "what": "x265 4.3 as MSYS2 builds it (libx265-217, version string 4.3+1-e9b8812), with MSYS2's patch and build recipe",
+      "license": "GPL-2.0-or-later",
+      "checked": "every file inside equals the checksum in its own MSYS2 recipe; its x265-4.3.tar.gz equals x265_4.3.tar.gz above"
+    },
+    {
+      "component": "libde265",
+      "part": "pillow-heif",
+      "file": "mingw-w64-libde265-1.1.3-1.src.tar.zst",
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-libde265-1.1.3-1.src.tar.zst",
+      "sha256": "53afb489bf59cc6f31630cee418179394d4047d5a60be1315db523a1a357b162",
+      "size": 322826,
+      "what": "libde265 1.1.3 as MSYS2 builds it",
+      "license": "LGPL-3.0",
+      "checked": "every file inside equals the checksum in its own MSYS2 recipe"
+    },
+    {
+      "component": "libheif",
+      "part": "pillow-heif",
+      "file": "libheif-1.23.6.tar.gz",
+      "url": "https://github.com/strukturag/libheif/releases/download/v1.23.6/libheif-1.23.6.tar.gz",
+      "sha256": "4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125",
+      "size": 2373898,
+      "what": "libheif 1.23.6",
+      "license": "LGPL-3.0 (its example programs: MIT)",
+      "checked": "the SHA-256 in pillow-heif's recipe below"
+    },
+    {
+      "component": "libheif-recipe",
+      "part": "pillow-heif",
+      "file": "pillow_heif-1.8.1-mingw-w64-libheif-PKGBUILD",
+      "url": "https://raw.githubusercontent.com/bigcat88/pillow_heif/v1.8.1/libheif/windows/mingw-w64-libheif/PKGBUILD",
+      "sha256": "99e2147ebbbc40e98383931d11bc4f938f73466d9b4a33c137e782ae32c02699",
+      "size": 2656,
+      "what": "pillow-heif's recipe that builds libheif, from its tag v1.8.1 (libheif/windows/mingw-w64-libheif/PKGBUILD)",
+      "license": "BSD-3-Clause",
+      "checked": "the file at pillow-heif's tag v1.8.1; it names libheif 1.23.6 and the SHA-256 above"
+    }
+  ]
+}

@@ -10,9 +10,10 @@ implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 The Windows release (`Fotodit.exe` and its `_internal` folder) also contains the components below, each
 under its own license. Their license texts are in the `licenses` folder: in the release, next to
 `Fotodit.exe`; in the source code, at the top of the project. The texts that the Python packages ship
-themselves are copied there during the build, into `licenses\python-packages\`. Every component is used
-unmodified, as its project publishes it (the Python packages come from PyPI, at the versions pinned in
-`requirements.txt`).
+themselves are copied there during the build, into `licenses\python-packages\`. Fotodit uses every
+component unmodified, as its project publishes it (the Python packages come from PyPI, at the versions
+pinned in `requirements.txt`). Some projects patch the libraries they build: PyAV's FFmpeg build applies
+patches of its own, which are part of its build scripts (see "Getting the source code").
 
 Because the release contains libraries under the GPL (x264, x265, and the FFmpeg build linked with
 them), the release as a whole is distributed under the GPL, version 3.
@@ -22,11 +23,19 @@ them), the release as a whole is distributed under the GPL, version 3.
 
 - Fotodit: the source archive published with every release (`Fotodit-<version>-source.zip`), or the
   project's repository.
+- The GPL and LGPL parts below (FFmpeg, x264, x265, LAME, GNU libiconv, libheif and libde265): copies of
+  their exact sources, with the build scripts and patches that made them, are published with every
+  release as `Fotodit-<version>-third-party-sources.zip`. Its `README.txt` says where each file comes from
+  and what it was checked against.
 - The Python packages: their source distributions on PyPI (`https://pypi.org/project/<name>/<version>/`)
   and the project pages listed below.
 - FFmpeg and the codec libraries in `_internal\av.libs`: built from their upstream sources by the PyAV
-  project's build scripts, https://github.com/PyAV-Org/pyav-ffmpeg (its release 9.0.2-1, the build for
-  FFmpeg 9.0.2); each library's own source is listed below.
+  project's build scripts, https://github.com/PyAV-Org/pyav-ffmpeg, release 9.0.2-1, which is commit
+  bac889417e26be29615cb6a3f38318151fed55cd (the build for FFmpeg 9.0.2); each library's own source is
+  listed below.
+- libheif, libde265 and x265 in pillow-heif: built with MSYS2, libheif from pillow-heif's recipe
+  (`libheif/windows/mingw-w64-libheif/PKGBUILD` in its repository), libde265 and x265 by MSYS2's own
+  packages, whose sources MSYS2 keeps at https://repo.msys2.org/mingw/sources/.
 - If a source listed here stops being available, ask in Fotodit's repository and a copy of that exact
   source will be provided.
 
@@ -80,7 +89,7 @@ them), the release as a whole is distributed under the GPL, version 3.
 - AMD AMF headers (compiled into FFmpeg): MIT, `licenses\AMF.txt`.
   https://github.com/GPUOpen-LibrariesAndSDKs/AMF
 - zlib 1.3.2: Zlib license, `licenses\zlib.txt`. https://zlib.net
-- GNU libiconv: LGPL-2.1-or-later, `licenses\LGPL-2.1.txt`. https://www.gnu.org/software/libiconv/
+- GNU libiconv 1.19: LGPL-2.1-or-later, `licenses\LGPL-2.1.txt`. https://www.gnu.org/software/libiconv/
 - GCC runtime (`libgcc_s_seh-1.dll`, `libstdc++-6.dll`): GPL-3.0-or-later with the GCC Runtime Library
   Exception 3.1, `LICENSE` and `licenses\GCC-runtime-library-exception-3.1.txt`. https://gcc.gnu.org
 - mingw-w64 winpthreads (`libwinpthread-1.dll`): MIT and others, `licenses\mingw-w64-winpthreads.txt`.
