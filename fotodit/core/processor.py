@@ -121,7 +121,7 @@ class ProcessError(Exception):
 class ContentOptions:
     strip_metadata: bool = False  # photos and videos
     convert_to_jpeg: bool = False  # photos
-    jpeg_quality: int = 95
+    jpeg_quality: int = 100  # the least loss JPEG allows; 95 and lower make smaller files
     raw_mode: str = RAW_AUTO
     convert_video: bool = False  # videos → MP4
     video_codec: str = VIDEO_COMPATIBLE
@@ -385,7 +385,7 @@ def _convert_to_jpeg(data: bytes, fmt: Fmt, opts: ContentOptions, edit: Edit | N
     kwargs = {
         "quality": opts.jpeg_quality,
         "optimize": True,
-        "subsampling": _chroma_for(fmt, data, im),
+        "subsampling": _chroma_for(fmt, data, im, opts.jpeg_quality),
     }
     if kept is not None:
         kwargs["icc_profile"] = kept.icc
@@ -402,14 +402,18 @@ def _convert_to_jpeg(data: bytes, fmt: Fmt, opts: ContentOptions, edit: Edit | N
     return ContentResult(out, Fmt.JPEG, CONVERTED, notes, clean.size, kept.icc if kept is not None else None)
 
 
-def _chroma_for(fmt: Fmt, data: bytes, im: Image.Image) -> str:
+def _chroma_for(fmt: Fmt, data: bytes, im: Image.Image, quality: int) -> str:
     """Chooses the chroma subsampling that preserves the source's color resolution.
 
-    Lossless sources (PNG, GIF, BMP, TIFF, lossless WebP) mostly hold screenshots or
-    graphics, where 4:2:0 blurs the edges of colored text. HEIC/AVIF/lossy WebP photos are
-    usually stored as 4:2:0 already, so using 4:2:0 loses nothing and makes the file smaller.
+    Quality 100 is the least loss a JPEG allows, so it keeps every source's colors at full
+    resolution: subsampling a 4:2:0 photo again is not lossless (the decoder's smooth upsampling
+    and the encoder's averaging do not cancel out; photos saved as HEIC came out with errors up to
+    57 levels at 4:2:0, 4 at 4:4:4, docs/RESEARCH.md §4). Lossless sources (PNG, GIF, BMP, TIFF,
+    lossless WebP) mostly hold screenshots or graphics, where 4:2:0 blurs the edges of colored
+    text. Below 100, HEIC/AVIF/lossy WebP photos, stored as 4:2:0 already, stay 4:2:0 for a
+    smaller file.
     """
-    if fmt in (Fmt.PNG, Fmt.GIF, Fmt.BMP, Fmt.TIFF):
+    if quality >= 100 or fmt in (Fmt.PNG, Fmt.GIF, Fmt.BMP, Fmt.TIFF):
         return "4:4:4"
     if fmt == Fmt.WEBP:
         return "4:4:4" if webp_meta.is_lossless(data) else "4:2:0"

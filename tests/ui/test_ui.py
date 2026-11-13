@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import builders as b  # noqa: E402
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import QSettings, Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from fotodit.core.planner import (  # noqa: E402
@@ -152,10 +152,22 @@ def test_thumbnails_show_exposure_and_trim(app, tmp_path):
         loader.shutdown()
 
 
+def test_jpg_quality_100_is_the_default_and_a_saved_choice_stays(app, tmp_path):
+    """Converting to JPG keeps as much as a JPEG can, unless the user chose a smaller file before."""
+    panel = OptionsPanel()
+    assert [panel.quality.itemData(i) for i in range(panel.quality.count())] == [100, 95, 90, 85, 75]
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    panel.load(settings)
+    assert panel.job_options().content.jpeg_quality == 100
+    settings.setValue("quality", 95)
+    panel.load(settings)
+    assert panel.job_options().content.jpeg_quality == 95
+
+
 def test_options_mapping_and_button_states(app):
     panel = OptionsPanel()
     o = panel.job_options()
-    assert o.content.strip_metadata and o.content.convert_to_jpeg and o.content.jpeg_quality == 95
+    assert o.content.strip_metadata and o.content.convert_to_jpeg and o.content.jpeg_quality == 100
     assert not o.rename.enabled and o.output.group_by == GROUP_NONE and not o.output.in_place
 
     panel.set_state(0, 0, 0, 0)

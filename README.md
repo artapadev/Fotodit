@@ -165,8 +165,9 @@ Built from source (see [For developers](#for-developers)), the same programs are
        pixels stay as they are and the camera's color profile (which can name the device) is replaced with
        a clean, standard one. A JPG stays losslessly untouched. Profiles that are not one of these standards
        are still converted to sRGB.
-   * **Fotoğrafları JPG'ye Dönüştür** (convert photos to JPG; quality selectable, 95% by default). If the
-     selection contains RAW files, a **RAW** option appears: **Kamera görünümü** (camera look: the camera's
+   * **Fotoğrafları JPG'ye Dönüştür** (convert photos to JPG; quality selectable: 100% by default, the
+     least loss a JPG allows; 95% and lower make smaller files). If the selection contains RAW files, a
+     **RAW** option appears: **Kamera görünümü** (camera look: the camera's
      embedded full-size JPEG, without recompression; developed from the RAW data if there is none) or
      **RAW verisinden işle** (develop from the RAW data: full resolution with LibRaw, camera white balance,
      sRGB).

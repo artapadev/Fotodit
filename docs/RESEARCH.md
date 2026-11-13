@@ -188,15 +188,19 @@ independent of Fotodit (**exiv2**) to cross-check that no EXIF/IPTC/XMP/ICC/comm
 | HDR (gain map) | The additional images do not fit into a JPEG | The SDR base image is correct and complete; a warning is shown for PQ/HLG (true HDR) images |
 | Animation / multiple pages | — | The first frame (the primary image for HEIC) is used and a note is added to the report |
 | Size limit | JPEGs larger than 65,500 pixels cannot be written | A clear error |
-| Chroma subsampling | 4:2:0 blurs colored text in screenshots | PNG/GIF/BMP/TIFF/lossless WebP → 4:4:4; HEIC/AVIF/lossy WebP → 4:2:0, since they are 4:2:0 already |
+| Chroma subsampling | 4:2:0 blurs colored text in screenshots, and subsampling a 4:2:0 photo again is not lossless | At 100% always 4:4:4; below it PNG/GIF/BMP/TIFF/lossless WebP → 4:4:4, HEIC/AVIF/lossy WebP → 4:2:0 (they are 4:2:0 already) |
 | Corrupt / truncated file | A half-gray image | The error is reported, the file is not touched |
 | Misleading extension | A PNG/WebP named ".jpg" | The format is determined from the first bytes |
 | Security | For formats such as EPS, Pillow may run an external program | Only 9 decoders are allowed |
 | Huge images | Running out of memory | 400 MP limit, clear error |
 
-**Quality:** Default 95% (the Pillow documentation advises against going above 95); 90%, 85% and 75% are also
-available. Baseline JPEG is written — the widest compatibility; the Huffman tables are optimized (a lossless size
-reduction).
+**Quality:** Default 100%, the least loss a JPEG allows: every quantization step is 1, and the colors keep their
+full resolution (4:4:4). The Pillow documentation advises against going above 95 (large files for hardly any
+gain), but measured on four of Windows' sample photos (1.3–2.4 megapixels, each as a PNG and as a phone-like
+HEIC of quality 90), 100% instead of 95% lowers the mean difference from the source from 0.18–1.22 to 0.06–0.23
+of 255 levels and the largest from 7–57 to 3–4; a HEIC at 100% with 4:2:0 still differed by up to 57. The files
+grow 1.7–3 times, so 95%, 90%, 85% and 75% remain for smaller files. Baseline JPEG is written — the widest
+compatibility; the Huffman tables are optimized (a lossless size reduction).
 
 **Converting with metadata removal turned off:** the EXIF bytes are carried over unchanged (they are not rewritten,
 so that the MakerNote offsets do not break); only the orientation value is set to 1 in place; ICC and XMP are carried
@@ -1050,10 +1054,11 @@ RAW support adds ~30 MB; most of this is the OpenBLAS library that the core of n
 against (it cannot be removed). Video support adds ~110 MB: PyAV's FFmpeg and its encoders (64 MB; none of them can be
 removed because FFmpeg links against them) plus Qt Multimedia and its own FFmpeg (~40 MB).
 `Fotodit.exe --self-test report.txt` verifies, in the packaged application, the 8 formats, both RAW paths, the
-exposure of a JPEG, keeping Display P3, the horizontal flip, keeping the capture date, the size limit and, for
-video, metadata removal, conversion to MP4, the thumbnail, a lossless trim, removing a part, Qt's playback plugin
-and AV1 playback with the fallback player; it checks that the license files are in the bundle and reports the GPU
-encoder it found.
+exposure of a JPEG, keeping Display P3, rotating, cropping and the horizontal flip, keeping the capture date, the
+size limit, folder scanning, the large preview and, for video, metadata removal, conversion to MP4, the thumbnail,
+a lossless trim, removing a part, Qt's playback plugin and AV1 playback with the fallback player; it checks that
+the license files are in the bundle and that the exe declares Per-Monitor v2 DPI awareness in its manifest, and
+reports the GPU encoder it found.
 
 **Licenses:** see §11. In short: the release bundles GPL libraries (x264, x265), so Fotodit is GPL-3.0-or-later.
 
@@ -1167,7 +1172,8 @@ Example: converting 500 phone photos to JPG and cleaning them takes about 5 minu
   "orijinallere uygula" mode, and takes screenshots of every screen, the confirmation and the results.
 * **Package self-test** (`--self-test`): verifies that all decoders in the exe, the RAW and JPEG exposure, keeping
   Display P3, FFmpeg/x264, a lossless trim (edit lists), removing a part, Qt's video playback plugin and the fallback
-  player (AV1) work and that the license files are bundled; reports the GPU encoder.
+  player (AV1) work, that the license files are bundled and that the exe declares Per-Monitor v2 DPI awareness;
+  reports the GPU encoder.
 * **The real exe** is driven with UI Automation (without using the mouse/keyboard, with a separate data folder): video
   tiles in "Gözat", "Seçilenler" notes, playback in the preview, rotation during playback, crop mode for video, and
   end-to-end processing from the UI (output to a separate working folder; H.264, no location, 1172×660).
@@ -1237,10 +1243,13 @@ ship are copied during the build. All of it is inside the exe as well (the bundl
 warranty, the license and the notices: the "Appropriate Legal Notices" the GPL asks an interactive program to show.
 
 **Source.** Each release is packed by `packaging/package_release.py`: the two program zips (with LICENSE.txt,
-THIRD-PARTY-NOTICES.txt and the licenses next to the exe), a source zip of Fotodit (its Corresponding Source) and
-SHA-256 checksums; it refuses to pack a build that lacks a license text named in the notices. The third-party
-sources are named in the notices (upstream releases at the bundled versions; FFmpeg and its codecs through PyAV's
-build scripts); attaching copies of those archives to each release is the safest way to keep them available.
+THIRD-PARTY-NOTICES.txt and the licenses next to the exe), a source zip of Fotodit (its Corresponding Source), a
+third-party sources zip and SHA-256 checksums; it refuses to pack a build that lacks a license text named in the
+notices. The third-party sources are named in the notices (upstream releases at the bundled versions; FFmpeg and
+its codecs through PyAV's build scripts), and every release carries copies of them, with the build scripts and
+patches that made them, in its third-party sources zip: `packaging/third_party_sources.json` lists them,
+`packaging/fetch_sources.py` downloads and checks them before the build, and the packing stops if one is missing
+or differs.
 
 **Signing.** An unsigned exe makes SmartScreen warn until the file earns a reputation. `packaging\build.ps1 -Sign` signs with a
 certificate from the user's certificate store (signtool, SHA-256, RFC 3161 timestamp) and self-tests the signed exe;

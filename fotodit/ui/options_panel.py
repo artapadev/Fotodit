@@ -84,6 +84,7 @@ PATTERN_TIPS = {
 KEEP_DATE_TIP = "options.keep_date_tip"
 RESIZE_TIP = "options.resize_tip"
 QUALITIES = [  # {p}: the quality as a percentage
+    (100, "options.quality.100"),
     (95, "options.quality.95"),
     (90, "options.quality.90"),
     (85, "options.quality.85"),
@@ -790,7 +791,8 @@ class OptionsPanel(QWidget):
         self.max_side.setCurrentIndex(max(0, self.max_side.findData(int(s.value("max_side", 2048)))))
         self.pattern.setCurrentIndex(max(0, self.pattern.findData(s.value("pattern", NAME_NUMBER))))
         self.convert.setChecked(flag("convert", True))
-        self.quality.setCurrentIndex(max(0, self.quality.findData(int(s.value("quality", 95)))))
+        quality = int(s.value("quality", ContentOptions.jpeg_quality))
+        self.quality.setCurrentIndex(max(0, self.quality.findData(quality)))
         self.raw_mode.setCurrentIndex(max(0, self.raw_mode.findData(s.value("raw_mode", RAW_AUTO))))
         self.video.setChecked(flag("video", True))
         self.video_codec.setCurrentIndex(max(0, self.video_codec.findData(s.value("video_codec", VIDEO_COMPATIBLE))))

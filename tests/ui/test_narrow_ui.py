@@ -1,7 +1,8 @@
 """A narrow window, in English (the longer texts): the footer's buttons keep their whole words, the
-rename rows fit the inspector at 1000 and 1440 px (in Turkish too), a pop-up button ends a long
-choice in "…" and lists every choice in full, pop-up buttons and number boxes show their arrows, a
-narrow column's title ends in "…", and scrolling the options over a box changes nothing (offscreen Qt)."""
+rename rows fit the inspector and the JPG quality choices show whole at 1000 and 1440 px (in Turkish
+too), a pop-up button ends a long choice in "…" and lists every choice in full, pop-up buttons and
+number boxes show their arrows, a narrow column's title ends in "…", and scrolling the options over a
+box changes nothing (offscreen Qt)."""
 
 from __future__ import annotations
 
@@ -45,6 +46,22 @@ def language(request):
     i18n.set_language(request.param)
     yield request.param
     i18n.set_language("tr")
+
+
+@pytest.fixture
+def styled(app):
+    """The app's font and style sheet, as the real window has them: text widths depend on both."""
+    from fotodit.ui import fonts, theme
+
+    old_font, old_sheet = app.font(), app.styleSheet()
+    if fonts.load():
+        font = QFont(fonts.FAMILY)
+        font.setPointSizeF(theme.BASE_SIZE)
+        app.setFont(font)
+    app.setStyleSheet(theme._qss())
+    yield
+    app.setStyleSheet(old_sheet)
+    app.setFont(old_font)
 
 
 def _window(tmp_path):
@@ -104,20 +121,12 @@ def _text_area(edit: QLineEdit) -> QRect:
 
 
 @pytest.mark.parametrize("size", [(1000, 700), (1440, 880)])
-def test_the_rename_rows_fit_the_inspector(app, tmp_path, language, size):
+def test_the_rename_rows_fit_the_inspector(app, tmp_path, language, size, styled):
     """At 1440 px the English photo prefix field showed "Photo_" as "hoto_": the start-number box
     beside it took 84 px where its largest number needs 69. At 1000 px "Name format:" and "first no.:"
     made the rows 17 px wider than the inspector: the cards lost their right edges, "Photo_" scrolled
     and the empty fields showed "e.g. …"; in Turkish "ilk no:" left room for "ör. Tat…" only. Measured
     in the app's font and style sheet, with the cursor at the end of the text as after typing it."""
-    from fotodit.ui import fonts, theme
-
-    old_font, old_sheet = app.font(), app.styleSheet()
-    if fonts.load():
-        font = QFont(fonts.FAMILY)
-        font.setPointSizeF(theme.BASE_SIZE)
-        app.setFont(font)
-    app.setStyleSheet(theme._qss())
     win = _window(tmp_path)
     try:
         win.resize(*size)
@@ -141,8 +150,24 @@ def test_the_rename_rows_fit_the_inspector(app, tmp_path, language, size):
     finally:
         win._confirm_discard_edits = lambda count: True
         win.close()
-        app.setStyleSheet(old_sheet)
-        app.setFont(old_font)
+
+
+@pytest.mark.parametrize("size", [(1000, 700), (1440, 880)])
+def test_the_jpg_quality_choices_show_whole(app, tmp_path, language, size, styled):
+    """At 1000 px the English default, "Very high (95%), recommended", showed as "Very high (95%),
+    recomme…": 191 px of text in 172 px of room. The default is now "Highest (100%), suggested" (163)."""
+    win = _window(tmp_path)
+    try:
+        win.resize(*size)
+        win.show()
+        app.processEvents()
+        box = win.options.quality
+        for i in range(box.count()):
+            box.setCurrentIndex(i)
+            assert box.shown_text() == box.currentText()
+    finally:
+        win._confirm_discard_edits = lambda count: True
+        win.close()
 
 
 def test_a_long_choice_ends_in_an_ellipsis_and_is_listed_in_full(app, english):

@@ -390,6 +390,22 @@ def test_convert_to_jpeg_clean(name, make, sampling):
         assert psnr(out, b.photo()) > 30
 
 
+@pytest.mark.parametrize("make", [b.png, b.heic], ids=["png", "heic"])
+def test_quality_100_quantizes_least_and_stays_closest(make):
+    """At 100 every quantization step is 1 and the colors keep their full resolution (4:4:4, a 4:2:0
+    HEIC's too, since subsampling it again is not lossless): the output is closer to the source than
+    at 95, in a larger file."""
+    src = make()
+    ref = decode(src)
+    outs = {q: process_bytes(src, ContentOptions(strip_metadata=True, convert_to_jpeg=True, jpeg_quality=q)).data
+            for q in (95, 100)}
+    best = decode(outs[100])
+    assert all(step == 1 for table in best.quantization.values() for step in table)
+    assert JpegImagePlugin.get_sampling(best) == 0
+    assert psnr(best, ref) > psnr(decode(outs[95]), ref) + 3
+    assert len(outs[100]) > len(outs[95])
+
+
 def test_convert_transparency_to_white():
     im = b.photo().convert("RGBA")
     im.putalpha(Image.new("L", im.size, 255))
