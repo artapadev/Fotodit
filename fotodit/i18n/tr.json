@@ -422,7 +422,7 @@
   "options.example_date_number": "Örnek: {p}2024-05-12_001{pe}, {p}2024-05-12_002{pe} …\nVideolar ayrı numaralanır: {v}2024-05-12_001{ve} …",
   "options.example_date_time": "Örnek: {p}2024-05-12_14-30-22{pe}, {p}2024-05-12_14-30-22_2{pe} …\nVideolar: {v}2024-05-12_18-15-00{ve} …",
   "options.example_number": "Örnek: {photos}\nVideolar ayrı numaralanır: {videos}",
-  "options.first_no": "ilk no:",
+  "options.first_no": "İlk:",
   "options.folder_hint": "Seçilen fotoğraf ve videolar burada toplanır; orijinaller değişmez.",
   "options.group": "Klasörlere Ayır",
   "options.group.day": "Günlere göre (2024-05-12)",

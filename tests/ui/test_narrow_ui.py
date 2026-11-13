@@ -1,7 +1,7 @@
 """A narrow window, in English (the longer texts): the footer's buttons keep their whole words, the
-prefix fields show a whole prefix at 1440 px, a pop-up button ends a long choice in "…" and lists
-every choice in full, pop-up buttons and number boxes show their arrows, a narrow column's title ends
-in "…", and scrolling the options over a box changes nothing (offscreen Qt)."""
+rename rows fit the inspector at 1000 and 1440 px (in Turkish too), a pop-up button ends a long
+choice in "…" and lists every choice in full, pop-up buttons and number boxes show their arrows, a
+narrow column's title ends in "…", and scrolling the options over a box changes nothing (offscreen Qt)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (  # noqa: E402
     QComboBox,
     QHeaderView,
     QLineEdit,
+    QScrollArea,
     QSpinBox,
     QStyle,
     QStyleOptionFrame,
@@ -36,6 +37,13 @@ def app():
 def english():
     i18n.set_language("en")
     yield
+    i18n.set_language("tr")
+
+
+@pytest.fixture(params=["en", "tr"])
+def language(request):
+    i18n.set_language(request.param)
+    yield request.param
     i18n.set_language("tr")
 
 
@@ -95,10 +103,13 @@ def _text_area(edit: QLineEdit) -> QRect:
     return rect.marginsRemoved(edit.textMargins()).adjusted(2, 0, -2, 0)
 
 
-def test_the_prefix_fields_show_a_whole_prefix_at_1440_px(app, tmp_path, english):
+@pytest.mark.parametrize("size", [(1000, 700), (1440, 880)])
+def test_the_rename_rows_fit_the_inspector(app, tmp_path, language, size):
     """At 1440 px the English photo prefix field showed "Photo_" as "hoto_": the start-number box
-    beside it took 84 px where its largest number needs 69. Measured in the app's font and style
-    sheet, with the cursor at the end of the text as after typing it."""
+    beside it took 84 px where its largest number needs 69. At 1000 px "Name format:" and "first no.:"
+    made the rows 17 px wider than the inspector: the cards lost their right edges, "Photo_" scrolled
+    and the empty fields showed "e.g. …"; in Turkish "ilk no:" left room for "ör. Tat…" only. Measured
+    in the app's font and style sheet, with the cursor at the end of the text as after typing it."""
     from fotodit.ui import fonts, theme
 
     old_font, old_sheet = app.font(), app.styleSheet()
@@ -109,14 +120,18 @@ def test_the_prefix_fields_show_a_whole_prefix_at_1440_px(app, tmp_path, english
     app.setStyleSheet(theme._qss())
     win = _window(tmp_path)
     try:
-        win.resize(1440, 880)
+        win.resize(*size)
         win.show()
         options = win.options
         options.rename.setChecked(True)
         app.processEvents()
+        scroll = options.findChild(QScrollArea)
+        assert scroll.widget().width() <= scroll.viewport().width()  # the cards keep their right edges
         for edit, text in ((options.prefix, "Photo_"), (options.video_prefix, "Video_")):
-            edit.setText(text)
             area = _text_area(edit)
+            hint = edit.placeholderText()  # Qt ends a hint that does not fit in "…"
+            assert edit.fontMetrics().elidedText(hint, Qt.TextElideMode.ElideRight, area.width()) == hint
+            edit.setText(text)
             assert area.width() >= edit.fontMetrics().horizontalAdvance(text) + 1, text  # the text and the cursor
             edit.grab()  # (painting scrolls a text that does not fit)
             assert edit.cursorPositionAt(QPoint(area.left(), area.center().y())) == 0, text  # its first letter shows

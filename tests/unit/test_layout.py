@@ -16,7 +16,7 @@ FOLDERS = {
     "docs",
     "fotodit", "fotodit/core", "fotodit/core/meta", "fotodit/core/video", "fotodit/i18n",
     "fotodit/resources", "fotodit/resources/fonts", "fotodit/resources/icons", "fotodit/ui",
-    "licenses", "packaging", "tests", "tests/unit", "tests/ui",
+    "licenses", "packaging", "packaging/msix", "tests", "tests/unit", "tests/ui",
 }
 FILES = {  # at the top level
     ".editorconfig", ".gitattributes", ".gitignore", "LICENSE", "README.md", "THIRD-PARTY-NOTICES.md",

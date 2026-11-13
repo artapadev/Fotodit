@@ -232,7 +232,9 @@ def _number_width(spin: QSpinBox) -> int:
 def _pair(edit: QLineEdit, spin: QSpinBox) -> QWidget:
     """Rename row: prefix and start number side by side. The number box is only as wide as its
     largest number, so the prefix field gets the rest: with 84 px for the number, the English photo
-    field at 1440 px showed "Photo_" as "hoto_"."""
+    field at 1440 px showed "Photo_" as "hoto_". The labels stay short for the same room: at 1000 px
+    "Name format:" and "first no.:" made the row 17 px wider than the inspector, and "ilk no:" cut the
+    Turkish hints to "ör. Tat…"."""
     row = QWidget()
     lay = QHBoxLayout(row)
     lay.setContentsMargins(0, 0, 0, 0)
